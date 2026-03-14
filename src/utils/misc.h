@@ -52,4 +52,3 @@ static const std::unordered_map<std::string, ParserSet> Parsers = {
 
 void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, std::vector<temp::rig_t>& rrig);
 void PrintRepakEntries(temp::rig_t& rig);
-void PrintSets(std::unordered_map<std::string, ParserSet> &Parsers, const char* text = "");

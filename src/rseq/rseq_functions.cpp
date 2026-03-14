@@ -154,7 +154,7 @@ void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimv
 	RLE::ExtractAnimValue(panimvalue, k, scale, v1);
 }
 
-void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1, float& v2){
+void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1, float& v2) {
 	int k = frame;
 
 	while (panimvalue->meta.total <= k) {
@@ -333,8 +333,11 @@ void ParsePoseKey(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq
 
 void ParseEvent_v10(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->numevents) {
-		if (!(pSeqDesc->numevents % 68)) printf("[!] Warning: events might be wrong, needed to check it manually.\n");
 		bool b2ndEvent = bool((pSeqDesc->weightlistindex - pSeqDesc->eventindex) % 272);
+		if (!(pSeqDesc->numevents % 68)) {
+			printf("[!] Warning: events might be wrong, needed to check it manually.\n");
+			b2ndEvent = true;
+		}
 
 		for (int i = 0; i < pSeqDesc->numevents; i++) {
 			temp::seqevent_t event{};
@@ -364,6 +367,8 @@ void ParseEvent_v11(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& s
 		for (int i = 0; i < pSeqDesc->numevents; i++) {
 			temp::seqevent_t event{};
 			auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
+			if (pEvents[i].szeventindex == 0) continue;
+
 			event.name = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].szeventindex));
 			event.cycle = pEvents[i].cycle;
 			event.event = pEvents[i].event;
@@ -413,9 +418,13 @@ void ParseWeightList(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& 
 }
 
 void ParseWeightList(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-	auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->weightlistindex));
-	for (int i = 0; i < seq.weightlist.size(); i++) {
-		seq.weightlist[i] = pWeightList[i];
+	if (pSeqDesc->weightlistindex && pSeqDesc->weightlistindex != 1 && pSeqDesc->weightlistindex != 3 && pSeqDesc->weightlistindex != 5) {
+		auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->weightlistindex));
+		for (int i = 0; i < seq.weightlist.size(); i++) {
+			seq.weightlist[i] = pWeightList[i];
+		}
+	} else {
+		std::fill(std::begin(seq.weightlist), std::end(seq.weightlist), 1.0f);
 	}
 }
 

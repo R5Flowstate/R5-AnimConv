@@ -48,7 +48,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 			std::string seqname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szlabelindex);
 			std::string activityname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szactivitynameindex);
 			int numanims = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
-			int numbones = (pSeqDesc->activitymodifierindex - pSeqDesc->weightlistindex) / 4;
+			int numbones = rig.bones.size();
 
 			temp::Sequence seq(seqname, numbones);
 			seq.anims.reserve(24);
@@ -101,7 +101,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 				anim.fps = pAnimDesc->fps;
 				anim.flags = pAnimDesc->flags;
 				anim.numframes = pAnimDesc->numframes;
-				anim.InitData(seq.numbones, rig, seq.IsAdditive());
+				anim.InitData(rig, seq.IsAdditive());
 
 				if (!(anim.flags & ANIM_VALID)) {
 					seq.anims.push_back(anim);
@@ -226,7 +226,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 		std::string seqname = STRING_FROM_IDX(pSeqDesc, OFFSET(pSeqDesc->szlabelindex));
 		std::string activityname = STRING_FROM_IDX(pSeqDesc, OFFSET(pSeqDesc->szactivitynameindex));
 		int numanims = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
-		int numbones = (pSeqDesc->activitymodifierindex - pSeqDesc->weightlistindex) / 4;
+		int numbones = rig.bones.size();
 
 		temp::Sequence seq(seqname, numbones);
 		seq.anims.reserve(24);
@@ -271,7 +271,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 			anim.fps = pAnimDesc->fps;
 			anim.flags = pAnimDesc->flags;
 			anim.numframes = pAnimDesc->numframes;
-			anim.InitData(seq.numbones, rig, seq.IsAdditive());
+			anim.InitData(rig, seq.IsAdditive());
 
 			if (!(anim.flags & ANIM_VALID)) {
 				seq.anims.push_back(anim);
@@ -467,10 +467,10 @@ void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
 			// weightlist
 			v7RseqDesc->weightlistindex = static_cast<uint32_t>(pData - pBase);
 			auto* v7WeightList = reinterpret_cast<float*>(pData);
-			for (int i = 0; i < seq.numbones; i++) {
+			for (int i = 0; i < rig.bones.size(); i++) {
 				v7WeightList[i] = seq.weightlist[i];
 			}
-			pData += sizeof(float) * seq.numbones;
+			pData += sizeof(float) * rig.bones.size();
 
 			// TODO:
 			v7RseqDesc->iklockindex = static_cast<uint32_t>(pData - pBase);
@@ -493,7 +493,7 @@ void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
 			for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
 				blends_index_map.push_back({ seq.blends[anim_iter] ,pData - pBase });
 				temp::animdesc_t anim = seq.anims[anim_iter];
-				anim.SubtractBase(seq.numbones, rig, seq.IsAdditive());
+				anim.SubtractBase(rig.bones.size(), rig, seq.IsAdditive());
 				uint32_t targetsectionframes = 61;
 
 				// anim
@@ -537,14 +537,14 @@ void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
 					}
 
 					// animdata
-					uint32_t bfa_size = ((seq.numbones + 3) / 2) & ~1;
+					uint32_t bfa_size = ((rig.bones.size() + 3) / 2) & ~1;
 					static thread_local std::vector<uint8_t> flaggedBones;
 					flaggedBones.clear();
 					flaggedBones.resize(bfa_size * 2);
 					char* boneflagarray = reinterpret_cast<char*>(pData);
 					pData += bfa_size;
 
-					for (int bone = 0; bone < seq.numbones; bone++) {
+					for (int bone = 0; bone < rig.bones.size(); bone++) {
 						uint8_t boneFlags = 0u;
 						auto& animData = anim.animdata[bone];
 

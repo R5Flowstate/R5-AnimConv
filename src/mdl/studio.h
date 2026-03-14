@@ -2042,6 +2042,7 @@ namespace r5 {
 			int unk_E0;
 		};
 	}
+
 	namespace v19 {
 		struct studiohdr_t {
 			int32_t flags;
@@ -2112,8 +2113,7 @@ namespace r5 {
 			uint16_t unkStrcOffset;
 			int32_t unk_E0;
 		};
-
-
+	
 		struct mstudiobonedata_t {
 			int16_t parent;
 			uint16_t unk_76;

@@ -52,11 +52,3 @@ void PrintRepakEntries(temp::rig_t& rig) {
 	}
 	printf("\n    },\n");
 }
-
-//void PrintSets(std::unordered_map<std::string, ParserSet> &Parsers, const char* text = "") {
-//	printf("%s [ ", text);
-//	for (auto& v : Parsers) {
-//		printf("%s ", v.first);
-//	}
-//	printf("]\n");
-//}

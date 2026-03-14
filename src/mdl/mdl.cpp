@@ -290,7 +290,7 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 			anim.fps = animDesc->fps;
 			anim.flags = (animDesc->flags & 0x20 ? 0x0 : 0x20000) | (animDesc->flags & ~0x20) | (seq.IsAdditive() * r5::ANIM_DELTA);
 			anim.numframes = animDesc->numframes;
-			anim.InitData(pMdlHdr->numbones, rig, anim.IsAdditive());
+			anim.InitData(rig, anim.IsAdditive());
 			verbose("      L-> %s (%d sections)\n", anim.name.c_str(), animDesc->sectionframes > 0 ? (animDesc->numframes / animDesc->sectionframes) + 2 : 1);
 
 			p2::mstudioanimsections_t* animsections = nullptr;
@@ -652,7 +652,7 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 			anim.fps = animDesc->fps;
 			anim.flags = (animDesc->flags & 0x20 ? 0x0 : 0x20000) | (animDesc->flags & ~0x20) | (seq.IsAdditive() * r5::ANIM_DELTA);
 			anim.numframes = animDesc->numframes;
-			anim.InitData(pMdlHdr->numbones, rig, anim.IsAdditive());
+			anim.InitData(rig, anim.IsAdditive());
 			verbose("      L-> %s (%d sections)\n", anim.name.c_str(), animDesc->sectionframes > 0 ? (animDesc->numframes / animDesc->sectionframes) + 2 : 1);
 
 			uint32_t* animsections = nullptr;

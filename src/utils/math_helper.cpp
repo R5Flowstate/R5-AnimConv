@@ -203,15 +203,20 @@ void MatrixRads(const Matrix3x4_t& matrix, float* angles)
 
 	if (xyDist > 0.001f)
 	{
-		angles[1] = atan2f(forward[1], forward[0]);
-		angles[0] = atan2f(-forward[2], xyDist);
-		angles[2] = atan2f(left[2], up[2]);
+		float pitch = atan2f(-forward[2], xyDist);
+		float yaw   = atan2f(forward[1], forward[0]);
+		float roll  = atan2f(left[2], up[2]);
+		angles[0] = roll;
+		angles[1] = pitch;
+		angles[2] = yaw;
 	}
 	else
 	{
-		angles[1] = atan2f(-left[0], left[1]);
-		angles[0] = atan2f(-forward[2], xyDist);
-		angles[2] = 0;
+		float pitch = atan2f(-forward[2], xyDist);
+		float yaw   = atan2f(-left[0], left[1]);
+		angles[0] = 0;
+		angles[1] = pitch;
+		angles[2] = yaw;
 	}
 }
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <cstdint> 
 
 #define STRING_FROM_IDX(base, idx) reinterpret_cast<const char*>((char*)base + idx)
@@ -107,32 +107,15 @@ struct Matrix3x4_t
 //	float x, y, z;
 //};
 
+void QuaternionRads(const struct Quaternion& q, Vector3& angles);
+
 struct Quaternion {
 	float x, y, z, w;
 
 	inline Vector3 ToRad() {
-		double norm = std::sqrt(w * w + x * x + y * y + z * z);
-		double qw = w / norm;
-		double qx = x / norm;
-		double qy = y / norm;
-		double qz = z / norm;
-
-		Vector3 euler;
-
-		double sinr_cosp = 2.0 * (qw * qx + qy * qz);
-		double cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy);
-		euler.x = (float)std::atan2(sinr_cosp, cosr_cosp);
-
-		double sinp = 2.0 * (qw * qy - qz * qx);
-		if (std::abs(sinp) >= 1.0)
-			euler.y = (float)std::copysign(M_PI / 2.0, sinp);
-		else
-			euler.y = (float)std::asin(sinp);
-
-		double siny_cosp = 2.0 * (qw * qz + qx * qy);
-		double cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz);
-		euler.z = (float)std::atan2(siny_cosp, cosy_cosp);
-		return euler;
+		Vector3 angles;
+		QuaternionRads(*this, angles);
+		return angles;
 	}
 };
 
@@ -143,11 +126,10 @@ struct Quaternion64 {
 	uint64_t wneg : 1;
 
 	inline float decode(uint64_t v1) const {
-		int32_t v2 = static_cast<int32_t>(v1) - 1048576;
-		return static_cast<float>(v2) / 1048576.5f;
+		return (static_cast<int>(v1) - 1048576) * (1 / 1048576.5f);
 	}
 	inline static uint64_t encode(float v1) {
-		return std::clamp(static_cast<int>(v1 * 1048576) + 1048576, 0, 2097151);
+		return std::clamp(static_cast<int>(lroundf(v1 * 1048576.f)) + 1048576, 0, 2097151);
 	}
 
 	inline Quaternion64& operator=(const Quaternion64& other) {
@@ -164,14 +146,16 @@ inline Quaternion UnpackQuat64(Quaternion64 q64) {
 	q.x = q64.decode(q64.x);
 	q.y = q64.decode(q64.y);
 	q.z = q64.decode(q64.z);
-	float w_sq = 1.0f - (q.x * q.x + q.y * q.y + q.z * q.z);
-	q.w = sqrt(w_sq);
+
+	const float dprem = 1.0f - ((q.x * q.x) + (q.y * q.y) + (q.z * q.z));
+
+	if (dprem < 0.0f)
+		q.w = sqrtf(dprem);
+	else
+		q.w = sqrtf(dprem);
 
 	if (q64.wneg)
 		q.w = -q.w;
-
-	if (!(isfinite(q.w)))
-		printf("");
 
 	return q;
 }
@@ -333,7 +317,7 @@ namespace temp {
 		int32_t sectionstallframes = 0;
 		int32_t sectionframes = 0;
 
-		void InitData(int32_t numbones, const temp::rig_t& rig, bool badditive);
+		void InitData(const temp::rig_t& rig, bool badditive);
 		void SubtractBase(int32_t numbones, const temp::rig_t& rig, bool badditive);
 		bool IsAdditive() const { return flags & 0x4; }
 	};
@@ -525,9 +509,10 @@ namespace temp {
 
 }
 
-inline void temp::animdesc_t::InitData(int32_t numbones, const temp::rig_t& rig, bool badditive) {
+inline void temp::animdesc_t::InitData(const temp::rig_t& rig, bool badditive) {
 	const Vector3 zero(0, 0, 0);
 	const Vector3 one(1, 1, 1);
+	const uint16_t numbones = rig.bones.size();
 	animdata.resize(numbones);
 
 	for (int i = 0; i < numbones; ++i) {

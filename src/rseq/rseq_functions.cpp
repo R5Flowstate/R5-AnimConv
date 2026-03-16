@@ -44,6 +44,7 @@ int GetSectionLength(T& animdesc, const int section, const int numSections) {
 	else if constexpr (
 		std::is_same_v<T, r5::anim::v10::mstudioanimdesc_t> ||
 		std::is_same_v<T, r5::anim::v11::mstudioanimdesc_t> ||
+		std::is_same_v<T, r5::anim::v12::mstudioanimdesc_t> ||
 		std::is_same_v<T, r5::anim::v121::mstudioanimdesc_t>)
 	{
 		if (!animdesc.sectionframes) return animdesc.numframes;
@@ -66,6 +67,7 @@ template int GetSectionLength<r2::mstudioanimdesc_t>(r2::mstudioanimdesc_t&, con
 template int GetSectionLength<r5::anim::v7::mstudioanimdesc_t>(r5::anim::v7::mstudioanimdesc_t&, const int, const int);
 template int GetSectionLength<r5::anim::v10::mstudioanimdesc_t>(r5::anim::v10::mstudioanimdesc_t&, const int, const int);
 template int GetSectionLength<r5::anim::v11::mstudioanimdesc_t>(r5::anim::v11::mstudioanimdesc_t&, const int, const int);
+template int GetSectionLength<r5::anim::v12::mstudioanimdesc_t>(r5::anim::v12::mstudioanimdesc_t&, const int, const int);
 template int GetSectionLength<r5::anim::v121::mstudioanimdesc_t>(r5::anim::v121::mstudioanimdesc_t&, const int, const int);
 
 int RLE::GetAnimValueOffset(const r5::anim::mstudioanimvalue_t* const panimvalue) {
@@ -179,14 +181,17 @@ int GetSectionCount(T& animdesc) {
 	}
 	else if constexpr (
 		std::is_same_v<T, r5::anim::v10::mstudioanimdesc_t> ||
-		std::is_same_v <T, r5::anim::v11::mstudioanimdesc_t>)
+		std::is_same_v<T, r5::anim::v11::mstudioanimdesc_t> || 
+		std::is_same_v<T, r5::anim::v12::mstudioanimdesc_t>)
 	{
 		const int useTrail = (animdesc.flags & ANIM_DATAPOINT) ? 0 : 1;
 		const int useStall = animdesc.sectionstallframes ? 1 : 0;
 		const int base = (animdesc.numframes - animdesc.sectionstallframes - 1) / animdesc.sectionframes;
 		return base + useTrail + useStall + 1;
 	}
-	else if constexpr (std::is_same_v<T, r5::anim::v121::mstudioanimdesc_t>) {
+	else if constexpr (
+		std::is_same_v<T, r5::anim::v121::mstudioanimdesc_t>)
+	{
 		const int useTrail = (animdesc.flags & ANIM_DATAPOINT) ? 0 : 1;
 		const int useStall = animdesc.sectionstallframes ? (animdesc.sectionstallframes != animdesc.sectionframes) : 0;
 		const int base = (animdesc.numframes - animdesc.sectionstallframes - 1) / animdesc.sectionframes;
@@ -199,6 +204,7 @@ template int GetSectionCount<r2::mstudioanimdesc_t>(r2::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v7::mstudioanimdesc_t>(r5::anim::v7::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v10::mstudioanimdesc_t>(r5::anim::v10::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v11::mstudioanimdesc_t>(r5::anim::v11::mstudioanimdesc_t&);
+template int GetSectionCount<r5::anim::v12::mstudioanimdesc_t>(r5::anim::v12::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v121::mstudioanimdesc_t>(r5::anim::v121::mstudioanimdesc_t&);
 
 void RLE::CalcBonePosition(const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t** BoneTrackData, Vector3& trackval, uint32_t localframe) {
@@ -313,7 +319,7 @@ std::vector<int32_t> GetAnimIndexes(const uint16_t* pBlends, temp::Sequence& seq
 	return blends_index_map;
 }
 
-void ParsePoseKey(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParsePoseKey(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->posekeyindex) {
 		auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + pSeqDesc->posekeyindex);
 		for (int i = 0; i < (pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1]); i++) {
@@ -322,7 +328,7 @@ void ParsePoseKey(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq
 	}
 }
 
-void ParsePoseKey(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParsePoseKey(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->posekeyindex) {
 		auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
 		for (int i = 0; i < (pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1]); i++) {
@@ -331,7 +337,25 @@ void ParsePoseKey(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq
 	}
 }
 
-void ParseEvent_v10(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParsePoseKey(const r5::anim::v12::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->posekeyindex) {
+		auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
+		for (int i = 0; i < (pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1]); i++) {
+			seq.posekeys.push_back(pPosekeys[i]);
+		}
+	}
+}
+
+void ParsePoseKey(const r5::anim::v121::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->posekeyindex) {
+		auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
+		for (int i = 0; i < (pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1]); i++) {
+			seq.posekeys.push_back(pPosekeys[i]);
+		}
+	}
+}
+
+void ParseEvent(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->numevents) {
 		bool b2ndEvent = bool((pSeqDesc->weightlistindex - pSeqDesc->eventindex) % 272);
 		if (!(pSeqDesc->numevents % 68)) {
@@ -362,7 +386,7 @@ void ParseEvent_v10(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& s
 	}
 }
 
-void ParseEvent_v11(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseEvent(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->numevents) {
 		for (int i = 0; i < pSeqDesc->numevents; i++) {
 			temp::seqevent_t event{};
@@ -379,7 +403,41 @@ void ParseEvent_v11(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& s
 	}
 }
 
-void ParseAutoLayer(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseEvent(const r5::anim::v12::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->numevents) {
+		for (int i = 0; i < pSeqDesc->numevents; i++) {
+			temp::seqevent_t event{};
+			auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
+			if (pEvents[i].szeventindex == 0) continue;
+
+			event.name = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].szeventindex));
+			event.cycle = pEvents[i].cycle;
+			event.event = pEvents[i].event;
+			event.type = pEvents[i].type;
+			event.options = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].optionsindex));
+			seq.events.push_back(event);
+		}
+	}
+}
+
+void ParseEvent(const r5::anim::v121::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->numevents) {
+		for (int i = 0; i < pSeqDesc->numevents; i++) {
+			temp::seqevent_t event{};
+			auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
+			if (pEvents[i].szeventindex == 0) continue;
+
+			event.name = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].szeventindex));
+			event.cycle = pEvents[i].cycle;
+			event.event = pEvents[i].event;
+			event.type = pEvents[i].type;
+			event.options = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].optionsindex));
+			seq.events.push_back(event);
+		}
+	}
+}
+
+void ParseAutoLayer(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	auto* pAutolayer = reinterpret_cast<r5::anim::v7::mstudioautolayer_t*>((char*)pSeqDesc + pSeqDesc->autolayerindex);
 	for (int i = 0; i < pSeqDesc->numautolayers; i++) {
 		temp::autolayer_t autolayer{};
@@ -395,7 +453,7 @@ void ParseAutoLayer(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& s
 	}
 }
 
-void ParseAutoLayer(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseAutoLayer(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
 	for (int i = 0; i < pSeqDesc->numautolayers; i++) {
 		temp::autolayer_t autolayer{};
@@ -410,25 +468,80 @@ void ParseAutoLayer(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& s
 	}
 }
 
-void ParseWeightList(r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseAutoLayer(const r5::anim::v12::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
+	for (int i = 0; i < pSeqDesc->numautolayers; i++) {
+		temp::autolayer_t autolayer{};
+		autolayer.guidSequence = pAutolayer[i].guidSequence;
+		autolayer.iPose = pAutolayer[i].iPose;
+		autolayer.flags = pAutolayer[i].flags;
+		autolayer.start = pAutolayer[i].start;
+		autolayer.peak = pAutolayer[i].peak;
+		autolayer.tail = pAutolayer[i].tail;
+		autolayer.end = pAutolayer[i].end;
+		seq.autolayers.push_back(autolayer);
+	}
+}
+
+void ParseAutoLayer(const r5::anim::v121::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
+	for (int i = 0; i < pSeqDesc->numautolayers; i++) {
+		temp::autolayer_t autolayer{};
+		autolayer.guidSequence = pAutolayer[i].guidSequence;
+		autolayer.iPose = pAutolayer[i].iPose;
+		autolayer.flags = pAutolayer[i].flags;
+		autolayer.start = pAutolayer[i].start;
+		autolayer.peak = pAutolayer[i].peak;
+		autolayer.tail = pAutolayer[i].tail;
+		autolayer.end = pAutolayer[i].end;
+		seq.autolayers.push_back(autolayer);
+	}
+}
+
+void ParseWeightList(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + pSeqDesc->weightlistindex);
 	for (int i = 0; i < seq.weightlist.size(); i++) {
 		seq.weightlist[i] = pWeightList[i];
 	}
 }
 
-void ParseWeightList(r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseWeightList(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->weightlistindex && pSeqDesc->weightlistindex != 1 && pSeqDesc->weightlistindex != 3 && pSeqDesc->weightlistindex != 5) {
 		auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->weightlistindex));
 		for (int i = 0; i < seq.weightlist.size(); i++) {
 			seq.weightlist[i] = pWeightList[i];
 		}
-	} else {
+	}
+	else {
 		std::fill(std::begin(seq.weightlist), std::end(seq.weightlist), 1.0f);
 	}
 }
 
-void ParseActMod_v10(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseWeightList(const r5::anim::v12::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->weightlistindex && pSeqDesc->weightlistindex != 1 && pSeqDesc->weightlistindex != 3 && pSeqDesc->weightlistindex != 5) {
+		auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->weightlistindex));
+		for (int i = 0; i < seq.weightlist.size(); i++) {
+			seq.weightlist[i] = pWeightList[i];
+		}
+	}
+	else {
+		std::fill(std::begin(seq.weightlist), std::end(seq.weightlist), 1.0f);
+	}
+}
+
+void ParseWeightList(const r5::anim::v121::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->weightlistindex && pSeqDesc->weightlistindex != 1 && pSeqDesc->weightlistindex != 3 && pSeqDesc->weightlistindex != 5) {
+		auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->weightlistindex));
+		for (int i = 0; i < seq.weightlist.size(); i++) {
+			seq.weightlist[i] = pWeightList[i];
+		}
+	}
+	else {
+		std::fill(std::begin(seq.weightlist), std::end(seq.weightlist), 1.0f);
+	}
+}
+
+void ParseActMod(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->numactivitymodifiers) {
 		auto* pActMod = reinterpret_cast<r5::anim::v10::mstudioactivitymodifier_t*>((char*)pSeqDesc + pSeqDesc->activitymodifierindex);
 		for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
@@ -440,7 +553,31 @@ void ParseActMod_v10(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequ
 	}
 }
 
-void ParseActMod_v11(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+void ParseActMod(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->numactivitymodifiers) {
+		auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
+		for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
+			temp::actmod_t actmod{};
+			actmod.name = STRING_FROM_IDX(&pActMod[i], OFFSET(pActMod[i].sznameindex));
+			actmod.negate = pActMod->negate;
+			seq.actmods.push_back(actmod);
+		}
+	}
+}
+
+void ParseActMod(const r5::anim::v12::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
+	if (pSeqDesc->numactivitymodifiers) {
+		auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
+		for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
+			temp::actmod_t actmod{};
+			actmod.name = STRING_FROM_IDX(&pActMod[i], OFFSET(pActMod[i].sznameindex));
+			actmod.negate = pActMod->negate;
+			seq.actmods.push_back(actmod);
+		}
+	}
+}
+
+void ParseActMod(const r5::anim::v121::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
 	if (pSeqDesc->numactivitymodifiers) {
 		auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
 		for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
@@ -453,7 +590,7 @@ void ParseActMod_v11(const r5::anim::v11::mstudioseqdesc_t* pSeqDesc, temp::Sequ
 }
 
 void RLE::ParseIkrules_v10(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim) {
-	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name, "pAnimDesc is null");
+	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
 
 	// ikrules
 	if (pAnimDesc->numikrules) {
@@ -515,7 +652,7 @@ void RLE::ParseIkrules_v10(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, te
 
 template<typename T>
 void RLE::ParseIkrules_v12(const T* pAnimDesc, temp::animdesc_t& anim) {
-	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name, "pAnimDesc is null");
+	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
 
 	// ikrules
 	if (pAnimDesc->numikrules && pAnimDesc->ikruleindex != 3 && pAnimDesc->ikruleindex != 5) {
@@ -579,7 +716,7 @@ template void RLE::ParseIkrules_v12<r5::anim::v12::mstudioanimdesc_t>(const r5::
 template void RLE::ParseIkrules_v12<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
 
 void RLE::ParseFrameMovements_v10(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim) {
-	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name, "pAnimDesc is null");
+	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
 
 	if ((pAnimDesc->flags & r5::ANIM_FRAMEMOVEMENT) && pAnimDesc->framemovementindex) {
 		auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + pAnimDesc->framemovementindex);
@@ -613,7 +750,7 @@ void RLE::ParseFrameMovements_v10(const r5::anim::v10::mstudioanimdesc_t* pAnimD
 
 template<typename T>
 void RLE::ParseFrameMovements_v12(const T* pAnimDesc, temp::animdesc_t& anim) {
-	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name, "pAnimDesc is null");
+	if (nullptr == pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
 
 	if ((pAnimDesc->flags & r5::ANIM_FRAMEMOVEMENT) && pAnimDesc->framemovementindex) {
 
@@ -648,8 +785,7 @@ void RLE::ParseFrameMovements_v12(const T* pAnimDesc, temp::animdesc_t& anim) {
 		}
 		// DP
 		else {
-			printf("[!] Error: Animation data cannot be decompressed.");
-			throw std::runtime_error("[!] Error: Animation data cannot be decompressed.");
+			PRINTANDTHROW(anim.name.c_str(), "Animation data cannot be decompressed.");
 		}
 	}
 }

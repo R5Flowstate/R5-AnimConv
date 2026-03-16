@@ -11,6 +11,9 @@
 #include <execution>
 #include <future>
 #include <mutex>
-#include <define.h>
+#include <core/macros.h>
+#include <core/math_types.h>
+#include <core/math_functions.h>
+#include <core/types.h>
 #include <mdl/studio.h>
 #include <utils/print.h>

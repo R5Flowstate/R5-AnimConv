@@ -5,6 +5,159 @@
 #include <mdl/mdl.h>
 #include <utils/rson_parser.h>
 #include <utils/misc.h>
+#include <core/cli.h>
+
+static int RunRseqMode(const std::string& input_path, const std::string& in_season, const std::string& out_season, bool bSkipEvents, bool bNoPause) {
+	auto parser = Parsers.find(in_season);
+	if (parser == Parsers.end()) {
+		printf("[!] Error: Unsupported assets version.\n");
+		return 1;
+	}
+
+	std::vector<temp::rig_t> rigs;
+	std::string in_dir = std::filesystem::is_regular_file(input_path) ? std::filesystem::path(input_path).parent_path().string() : input_path;
+	std::filesystem::directory_entry entry = std::filesystem::directory_entry(in_dir);
+
+	/* GATHER PATHS */
+	GatherRigPaths(in_dir, entry, rigs);
+	for (auto& rig : rigs) {
+		std::filesystem::path rigpath = rig.rrigpath;
+		std::filesystem::path rsonpath = rigpath.parent_path().string() + "\\" + rigpath.stem().string() + ".rson";
+		if (std::filesystem::is_regular_file(rsonpath)) {
+			auto data = parse_rson(rsonpath.string());
+			rig.rsonpath = rsonpath.string();
+			rig.rseqpaths = data["seqs"];
+			rig.rigpaths = data["rigs"];
+			//rig.materialpaths = data["matl"];
+		}
+	}
+
+	if (rigs.empty()) {
+		printf("[!] Error: No rrig files found in the specified directory.\n");
+		return 1;
+	}
+
+	/* PARSE */
+	for (auto& rig : rigs) {
+		if (rig.rsonpath.empty()) {
+			printf("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
+			continue;
+		}
+
+		/* PARSE RRIG */ {
+			verbose("\nParsing rrig %s...\n", rig.rrigpath.c_str());
+			uint32_t rigFileSize = (uint32_t)std::filesystem::file_size(rig.rrigpath);
+			std::ifstream rrig_stream(rig.rrigpath, std::ios::binary);
+			rrig_stream.seekg(0, std::ios::beg);
+			std::vector<char> buffer(rigFileSize);
+			rrig_stream.read(buffer.data(), rigFileSize);
+			rrig_stream.close();
+
+			parser->second.rrig(buffer.data(), rig);
+			std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
+
+			if (rig.rseqpaths.empty()) {
+				printf("[!] Warning: No .rseq paths found in .rson for %s\n", rig.name.c_str());
+				continue;
+			}
+		}
+		rig.sequences.reserve(rig.rseqpaths.size());
+
+		/* PARSE RSEQ */ {
+			printf("Parsing Sequences for %s\n", rig.name.c_str());
+			parser->second.rseq(in_dir, rig);
+		}
+	}
+	printf("\n");
+
+	/* WRITE */
+	for (auto& rig : rigs) {
+		if (std::filesystem::path(rig.name).extension() == ".rmdl") {
+			printf("Skipping %s\n", rig.name.c_str());
+		}
+		else {
+			printf("Writing %s\n", rig.name.c_str());
+			WriteRRIG_v8(in_dir + "/conv", rig);
+		}
+
+		if (rig.rseqpaths.empty()) {
+			printf("[!] Skipping: No RSEQ path was founded in RSON for %s\n", rig.name.c_str());
+			continue;
+		}
+
+		printf("Writing rseqs for %s\n", rig.name.c_str());
+		if (out_season == "3") {
+			WriteRSEQ_v7(rig, bSkipEvents);
+		}
+		else {
+			printf("[!] Error: Only rseq v7 is supported now\n");
+			return 1;
+		}
+	}
+
+	/* PRINT REPAK ENTRIES */
+	if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
+	for (auto& rig : rigs)  PrintRepakEntries(rig);
+	verbose("[+] Succeeded!\n"); 
+	if (!bNoPause) system("pause");
+	return 0;
+}
+
+static int RunMdlMode(const std::string& input_mdl, const std::string& override_rrig_path, const std::string& override_rseq_path, bool bNoPause) {
+	std::ifstream mdl_stream(input_mdl, std::ios::binary);
+	std::filesystem::path file_path = std::filesystem::absolute(input_mdl);
+	std::string output_dir = file_path.parent_path().string();
+	verbose("Reading: %s...\n", input_mdl.c_str());
+
+	if (!std::filesystem::exists(input_mdl)) {
+		printf("[!] Error: Input file does not exist.\n");
+		return 1;
+	}
+
+	int magic = 0;
+	mdl_stream.read(reinterpret_cast<char*>(&magic), sizeof(int));
+	if (magic != 'TSDI') {
+		printf("[!] Error: Input file is not a MDL file.\n");
+		return 1;
+	}
+
+	int mdl_version = 0;
+	mdl_stream.read(reinterpret_cast<char*>(&mdl_version), sizeof(int));
+
+	uint32_t mdlFileSize = (uint32_t)std::filesystem::file_size(input_mdl);
+	std::vector<char> buffer(mdlFileSize, 0);
+	mdl_stream.seekg(0, std::ios::beg);
+	mdl_stream.read(buffer.data(), mdlFileSize);
+	mdl_stream.close();
+
+	/* PARSE MDL */
+	printf("Parsing %s\n", file_path.filename().string().c_str());
+	temp::rig_t rig;
+	switch (mdl_version) {
+	case 49:
+		ParseMDL_v49(buffer.data(), rig, output_dir, override_rrig_path, override_rseq_path);
+		break;
+	case 53:
+		ParseMDL_v53(buffer.data(), rig, output_dir, override_rrig_path, override_rseq_path);
+		break;
+	default:
+		printf("Failed: This MDL v%d does not support yet, Only v49 and v53 are supported.\n", mdl_version);
+		return 1;
+	}
+
+	/* WRITE RRIG/RSEQ */
+	printf("\n\nWriting %s\n", rig.name.c_str());
+	WriteRRIG_v8(output_dir, rig);
+	printf("Writing sequences\n");
+	WriteRSEQ_v7(rig);
+
+	/* PRINT REPAK ENTRIES */
+	if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
+	PrintRepakEntries(rig);
+	verbose("[+] Succeeded!\n");
+	if (!bNoPause) system("pause");
+	return 0;
+}
 
 int main(int argc, char* argv[]) {
 	std::string input_mdl;
@@ -50,158 +203,16 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	/* RSEQ TO RSEQ */
-	if (std::filesystem::exists(input_mdl)) {
-		if (std::filesystem::is_regular_file(input_mdl) && (std::filesystem::path(input_mdl).extension() == ".mdl")) goto CONVERT_MDL;
-
-		auto parser = Parsers.find(in_season);
-		if (parser == Parsers.end()) {
-			printf("[!] Error: Unsupported assets version.\n");
-			return 1;
-		}
-
-		std::vector<temp::rig_t> rigs;
-		std::string in_dir = std::filesystem::is_regular_file(input_mdl) ? std::filesystem::path(input_mdl).parent_path().string() : input_mdl;
-		std::filesystem::directory_entry entry = std::filesystem::directory_entry(in_dir);
-
-		/* GATHER PATHS */
-		GatherRigPaths(in_dir, entry, rigs);
-		for (auto& rig : rigs) {
-			std::filesystem::path rigpath = rig.rrigpath;
-			std::filesystem::path rsonpath = rigpath.parent_path().string() + "\\" + rigpath.stem().string() + ".rson";
-			if (std::filesystem::is_regular_file(rsonpath)) {
-				auto data = parse_rson(rsonpath.string());
-				rig.rsonpath = rsonpath.string();
-				rig.rseqpaths = data["seqs"];
-				rig.rigpaths = data["rigs"];
-				//rig.materialpaths = data["matl"];
-			}
-		}
-
-		if (rigs.empty()) {
-			printf("[!] Error: No rrig files found in the specified directory.\n");
-			return 1;
-		}
-
-		/* PARSE */
-		for (auto& rig : rigs) {
-			if (rig.rsonpath.empty()) {
-				printf("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
-				continue;
-			}
-
-			/* PARSE RRIG */ {
-				verbose("\nParsing rrig %s...\n", rig.rrigpath.c_str());
-				uint32_t rigFileSize = (uint32_t)std::filesystem::file_size(rig.rrigpath);
-				std::ifstream rrig_stream(rig.rrigpath, std::ios::binary);
-				rrig_stream.seekg(0, std::ios::beg);
-				std::vector<char> buffer(rigFileSize);
-				rrig_stream.read(buffer.data(), rigFileSize);
-				rrig_stream.close();
-
-				parser->second.rrig(buffer.data(), rig);
-				std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
-
-				if (rig.rseqpaths.empty()) {
-					printf("[!] Warning: No .rseq paths found in .rson for %s\n", rig.name.c_str());
-					continue;
-				}
-			}
-			rig.sequences.reserve(rig.rseqpaths.size());
-
-			/* PARSE RSEQ */ {
-				printf("Parsing Sequences for %s\n", rig.name.c_str());
-				parser->second.rseq(in_dir, rig);
-			}
-		}
-		printf("\n");
-
-		/* WRITE */
-		for (auto& rig : rigs) {
-			if (std::filesystem::path(rig.name).extension() == ".rmdl") {
-				printf("Skipping %s\n", rig.name.c_str());
-				goto WRITE_RSEQ;
-			}
-
-			printf("Writing %s\n", rig.name.c_str());
-			WriteRRIG_v8(in_dir + "/conv", rig);
-
-		WRITE_RSEQ:
-			if (rig.rseqpaths.empty()) {
-				printf("[!] Skipping: No RSEQ path was founded in RSON for %s\n", rig.name.c_str());
-				continue;
-			}
-
-			printf("Writing rseqs for %s\n", rig.name.c_str());
-			if (out_season == "3") {
-				WriteRSEQ_v7(rig, bSkipEvents);
-			}
-			else {
-				printf("[!] Error: Only rseq v7 is supported now\n");
-				return 1;
-			}
-		}
-
-		/* PRINT REPAK ENTRIES */
-		if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
-		for (auto& rig : rigs)  PrintRepakEntries(rig);
-		verbose("[+] Succeeded!\n"); 
-		if (!bNoPause) system("pause");
-		return 0;
-	}
-
-CONVERT_MDL:
-	/* MDL TO RRIG/RSEQ */
-	std::ifstream mdl_stream(input_mdl, std::ios::binary);
-	std::filesystem::path file_path = std::filesystem::absolute(input_mdl);
-	std::string output_dir = file_path.parent_path().string();
-	verbose("Reading: %s...\n", input_mdl.c_str());
-
 	if (!std::filesystem::exists(input_mdl)) {
-		printf("[!] Error: Input file does not exist.\n");
+		printf("[!] Error: Input path does not exist.\n");
 		return 1;
 	}
 
-	int magic = 0;
-	mdl_stream.read(reinterpret_cast<char*>(&magic), sizeof(int));
-	if (magic != 'TSDI') {
-		printf("[!] Error: Input file is not a MDL file.\n");
-		return 1;
+	// MDL mode: input is a .mdl file
+	if (std::filesystem::is_regular_file(input_mdl) && (std::filesystem::path(input_mdl).extension() == ".mdl")) {
+		return RunMdlMode(input_mdl, override_rrig_path, override_rseq_path, bNoPause);
 	}
 
-	int mdl_version = 0;
-	mdl_stream.read(reinterpret_cast<char*>(&mdl_version), sizeof(int));
-
-	uint32_t mdlFileSize = (uint32_t)std::filesystem::file_size(input_mdl);
-	std::vector<char> buffer(mdlFileSize, 0);
-	mdl_stream.seekg(0, std::ios::beg);
-	mdl_stream.read(buffer.data(), mdlFileSize);
-	mdl_stream.close();
-
-	/* PARSE MDL */
-	printf("Parsing %s\n", file_path.filename().string().c_str());
-	temp::rig_t rig;
-	switch (mdl_version) {
-	case 49:
-		ParseMDL_v49(buffer.data(), rig, output_dir, override_rrig_path, override_rseq_path);
-		break;
-	case 53:
-		ParseMDL_v53(buffer.data(), rig, output_dir, override_rrig_path, override_rseq_path);
-		break;
-	default:
-		printf("Failed: This MDL v%d does not support yet, Only v49 and v53 are supported.\n", mdl_version);
-	}
-
-	/* WRITE RRIG/RSEQ */
-	printf("\n\nWriting %s\n", rig.name.c_str());
-	WriteRRIG_v8(output_dir, rig);
-	printf("Writing sequences\n");
-	WriteRSEQ_v7(rig);
-
-	/* PRINT REPAK ENTRIES */
-	if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
-	PrintRepakEntries(rig);
-	verbose("[+] Succeeded!\n");
-	if (!bNoPause) system("pause");
-	return 0;
+	// RSEQ mode: input is a directory (or a non-mdl file whose parent dir is used)
+	return RunRseqMode(input_mdl, in_season, out_season, bSkipEvents, bNoPause);
 }

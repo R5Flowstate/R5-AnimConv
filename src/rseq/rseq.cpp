@@ -84,10 +84,10 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 			verbose("%s\n", seqname.c_str());
 
 			ParsePoseKey(pSeqDesc, seq);
-			ParseEvent_v10(pSeqDesc, seq);
+			ParseEvent(pSeqDesc, seq);
 			ParseAutoLayer(pSeqDesc, seq);
 			ParseWeightList(pSeqDesc, seq);
-			ParseActMod_v10(pSeqDesc, seq);
+			ParseActMod(pSeqDesc, seq);
 
 			// blends
 			auto* pBlends = PTR_FROM_IDX(int, pSeqDesc, pSeqDesc->animindexindex);
@@ -134,7 +134,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 					
 					if (pAnimDesc->sectionindex) {
 						if (animsections[section].isExternal) {
-							if (animsections[section].animidx >= extn_buffer.size()) PRINTANDTHROW(extn_file, "Out of rseq_extn range.");
+							if (animsections[section].animidx >= extn_buffer.size()) PRINTANDTHROW(extn_file.c_str(), "[!] Error: Passed the end of .rseq_extn");
 							pBoneFlagArray = PTR_FROM_IDX(char, extn_buffer.data(), animsections[section].animidx);
 						}
 						else {
@@ -177,7 +177,6 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 	for (auto& t : tasks) t.get();
 	printf("\n");
 }
-
 
 void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 	ProgressBar bar(rig.rseqpaths.size());
@@ -255,10 +254,10 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 		verbose("%s\n", seqname.c_str());
 
 		ParsePoseKey(pSeqDesc, seq);
-		ParseEvent_v11(pSeqDesc, seq);
+		ParseEvent(pSeqDesc, seq);
 		ParseAutoLayer(pSeqDesc, seq);
 		ParseWeightList(pSeqDesc, seq);
-		ParseActMod_v11(pSeqDesc, seq);
+		ParseActMod(pSeqDesc, seq);
 
 		// blends
 		auto* pBlends = PTR_FROM_IDX(uint16_t, pSeqDesc, OFFSET(pSeqDesc->animindexindex));
@@ -306,16 +305,14 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 					if (animsections[section] < 0) {
 						int32_t offset = -1 - animsections[section];
 						if (offset >= extn_buffer.size()) {
-							printf("\n[!] Error: Out of %s range.\n", extn_file.c_str());
-							throw std::runtime_error("Out of rseq_extn range.");
+							PRINTANDTHROW(extn_file.c_str(), "[!] Error: Passed the end of .rseq_extn");
 						}
 						pBoneFlagArray = PTR_FROM_IDX(char, extn_buffer.data(), offset);
 					}
 					else {
 						int32_t offset = animsections[section];
 						if (offset >= inputFileSize) {
-							printf("\n[!] Error: Out of %s range.\n", seqname.c_str());
-							throw std::runtime_error("Out of rseq range.");
+							PRINTANDTHROW(path.c_str(), "[!] Error: Passed the end of .rseq");
 						}
 						pBoneFlagArray = PTR_FROM_IDX(char, pAnimDesc, offset);
 					}
@@ -326,7 +323,6 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 					auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBoneFlagArray, bfa_size);
 					for (int bone = 0; bone < numbones; bone++) {
 						uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2));
-
 						Vector3& trackpos = anim.animdata[bone].pos[frame];
 						Vector3& trackrot = anim.animdata[bone].rot[frame];
 						Vector3& trackscl = anim.animdata[bone].scl[frame];
@@ -354,6 +350,412 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 		if (!_enable_verbose) bar.AddAndPrint();
 	}
 	for (auto& t : tasks) t.get();
+	printf("\n");
+}
+
+void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
+	ProgressBar bar(rig.rseqpaths.size());
+
+	std::vector<std::future<void>> tasks;
+	std::mutex seq_mutex;
+
+	if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+	for (const auto& file : rig.rseqpaths) {
+		//tasks.push_back(std::async(std::launch::async, [&, file]() {
+		std::string path = in_dir + "\\" + file;
+		std::filesystem::path relative_path = std::filesystem::relative(path, in_dir);
+		std::string out_dir = path + "_conv";
+
+		if (!std::filesystem::is_regular_file(path)) {
+			printf("[!] Error: rseq not found for %s\n", relative_path.string().c_str());
+			return; //continue;
+		}
+
+		size_t inputFileSize = std::filesystem::file_size(path);
+		char* stream_buffer = new char[inputFileSize];
+		{
+			std::lock_guard<std::mutex> lock(seq_mutex);
+			std::ifstream rseq_stream(path, std::ios::binary);
+			rseq_stream.read(stream_buffer, inputFileSize);
+			rseq_stream.close();
+		}
+
+		// out path
+		auto first_dir = relative_path.begin();
+		std::filesystem::path newPath = first_dir->string();
+		++first_dir;
+		for (; first_dir != relative_path.end(); ++first_dir) {
+			newPath /= *first_dir;
+		}
+		out_dir = in_dir + "\\conv\\" + newPath.string();
+
+		// bad size
+		if (inputFileSize <= sizeof(anim::v12::mstudioseqdesc_t)) {
+			printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+			return; //continue;
+		}
+
+		auto* pSeqDesc = reinterpret_cast<anim::v12::mstudioseqdesc_t*>(stream_buffer);
+
+		std::string seqname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szlabelindex);
+		std::string activityname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szactivitynameindex);
+		int numanims = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
+		int numposekeys = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
+		int numbones = static_cast<uint32_t>(rig.bones.size());
+
+		temp::Sequence seq(seqname, numbones);
+		seq.anims.reserve(24);
+		seq.path = out_dir;
+		seq.flags = pSeqDesc->flags;
+		seq.activityname = activityname;
+		seq.activity = pSeqDesc->activity;
+		seq.actweight = pSeqDesc->actweight;
+		seq.bbmin = pSeqDesc->bbmin;
+		seq.bbmax = pSeqDesc->bbmax;
+		seq.groupsize[0] = pSeqDesc->groupsize[0];
+		seq.groupsize[1] = pSeqDesc->groupsize[1];
+		seq.paramindex[0] = pSeqDesc->paramindex[0];
+		seq.paramindex[1] = pSeqDesc->paramindex[1];
+		seq.paramstart[0] = pSeqDesc->paramstart[0];
+		seq.paramstart[1] = pSeqDesc->paramstart[1];
+		seq.paramend[0] = pSeqDesc->paramend[0];
+		seq.paramend[1] = pSeqDesc->paramend[1];
+		seq.fadeintime = pSeqDesc->fadeintime;
+		seq.fadeouttime = pSeqDesc->fadeouttime;
+		seq.localentrynode = pSeqDesc->localentrynode;
+		seq.localexitnode = pSeqDesc->localexitnode;
+		seq.ikResetMask = pSeqDesc->ikResetMask;
+		seq.unk1 = pSeqDesc->unk1;
+
+		verbose("%s\n", seqname.c_str());
+
+		ParsePoseKey(pSeqDesc, seq);
+		ParseEvent(pSeqDesc, seq);
+		ParseAutoLayer(pSeqDesc, seq);
+		ParseWeightList(pSeqDesc, seq);
+		ParseActMod(pSeqDesc, seq);
+
+		// blends
+		auto* pBlends = PTR_FROM_IDX(uint16_t, stream_buffer, pSeqDesc->animindexindex);
+		std::vector<int32_t> animIndexes = GetAnimIndexes(pBlends, seq, numanims);
+		for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+			// anim 
+			auto* pAnimDesc = PTR_FROM_IDX(anim::v12::mstudioanimdesc_t, stream_buffer, animIndexes[anim_iter]);
+
+			if (pAnimDesc->flags & ANIM_DATAPOINT) {
+				PRINTANDTHROW(seq.name.c_str(), "[!] Error: Datapoint anim is not supported yet.");
+			}
+
+			temp::animdesc_t anim{};
+			anim.name = STRING_FROM_IDX(pAnimDesc, pAnimDesc->sznameindex);
+			anim.fps = pAnimDesc->fps;
+			anim.flags = pAnimDesc->flags;
+			anim.numframes = pAnimDesc->numframes;
+			anim.InitData(rig, seq.IsAdditive());
+
+			if (!(anim.flags & ANIM_VALID)) {
+				seq.anims.push_back(anim);
+				continue;
+			}
+
+			// anim sections
+			uint32_t num_sections = 1;
+			int32_t* animsections{};
+			if (pAnimDesc->sectionindex) {
+				num_sections = GetSectionCount(*pAnimDesc);
+				animsections = PTR_FROM_IDX(int32_t, pAnimDesc, pAnimDesc->sectionindex);
+			}
+			uint32_t bfa_size = ((numbones + 3) / 2) & ~1;
+
+			std::vector<char> extn_buffer;
+			std::string extn_file = path + "_extn";
+			if (std::filesystem::exists(extn_file)) {
+				std::ifstream extn_stream(extn_file, std::ios::binary);
+				extn_buffer.resize(std::filesystem::file_size(extn_file));
+				extn_stream.read(extn_buffer.data(), std::filesystem::file_size(extn_file));
+				extn_stream.close();
+			}
+
+			uint32_t sectionbaseframe = 0;
+			for (uint32_t section = 0; section < num_sections; section++) {
+				uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+
+				//char* pBoneFlagArray = reinterpret_cast<char*>(asqd_buffer);
+				//if (pAnimDesc->sectionindex && section) {
+				//	if (animsections[section - 1] < 0) {
+				//		int32_t offset = -1 - animsections[section - 1];
+				//		if (offset >= extnFileSize) {
+				//			PRINTANDTHROW(extn_file.c_str(), "[!] Error: Out of .rseq_extn range.");
+				//		}
+				//		pBoneFlagArray = PTR_FROM_IDX(char, extn_buffer, offset);
+				//	}
+				//	else {
+				//		int32_t offset = animsections[section - 1];
+				//		if (offset >= asqdFileSize) {
+				//			PRINTANDTHROW((seq.name + ":" + asqd_file.str()).c_str(), "[!] Error: Out of .asqd range.");
+				//		}
+				//		pBoneFlagArray = PTR_FROM_IDX(char, asqd_buffer, offset);
+				//	}
+				//}
+
+				char* pBoneFlagArray = PTR_FROM_IDX(char, pAnimDesc, OFFSET(pAnimDesc->animindex));
+				if (pAnimDesc->sectionindex) {
+					if (animsections[section] < 0) {
+						int32_t offset = -1 - animsections[section];
+						if (offset >= extn_buffer.size()) {
+							PRINTANDTHROW(extn_file.c_str(), "[!] Error: Passed the end of .rseq_extn");
+						}
+						pBoneFlagArray = PTR_FROM_IDX(char, extn_buffer.data(), offset);
+					}
+					else {
+						int32_t offset = animsections[section];
+						if (offset >= inputFileSize) {
+							PRINTANDTHROW(path.c_str(), "[!] Error: Passed the end of .rseq");
+						}
+						pBoneFlagArray = PTR_FROM_IDX(char, pAnimDesc, offset);
+					}
+				}
+
+				for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+					uint32_t frame = sectionbaseframe + localframe;
+					auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBoneFlagArray, bfa_size);
+					for (int bone = 0; bone < numbones; bone++) {
+						uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2));
+						Vector3& trackpos = anim.animdata[bone].pos[frame];
+						Vector3& trackrot = anim.animdata[bone].rot[frame];
+						Vector3& trackscl = anim.animdata[bone].scl[frame];
+						if (boneFlags & RLE::BONEDATA) {
+							auto* pTrackData = PTR_FROM_IDX(uint16_t, pTrack, sizeof(anim::mstudio_rle_anim_t));
+							if (boneFlags & RLE::BONEPOS) RLE::CalcBonePosition(*pTrack, &pTrackData, trackpos, localframe);
+							if (boneFlags & RLE::BONEROT) RLE::CalcBoneQuaternion(*pTrack, &pTrackData, trackrot, localframe);
+							if (boneFlags & RLE::BONESCALE) RLE::CalcBoneScale(*pTrack, &pTrackData, trackscl, localframe);
+							pTrack = (anim::mstudio_rle_anim_t*)((char*)pTrack + pTrack->size);
+						}
+					}
+				}
+				sectionbaseframe += sectionframes;
+			}
+
+			RLE::ParseIkrules_v12(pAnimDesc, anim);
+			RLE::ParseFrameMovements_v12(pAnimDesc, anim);
+			seq.anims.push_back(anim);
+		}
+		rig.sequences.push_back(seq);
+		//{
+		//	std::lock_guard<std::mutex> lock(mutex);//
+		//	rig.sequences.push_back(std::move(seq));    //rig.sequences.push_back(seq);
+		//}
+		//}));
+		if (!_enable_verbose) bar.AddAndPrint();
+	}
+	//for (auto& t : tasks) t.get();
+	printf("\n");
+}
+
+void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
+	ProgressBar bar(rig.rseqpaths.size());
+
+	std::vector<std::future<void>> tasks;
+	std::mutex seq_mutex;
+
+	if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+	for (const auto& file : rig.rseqpaths) {
+		//tasks.push_back(std::async(std::launch::async, [&, file]() {
+		std::string path = in_dir + "\\" + file;
+		std::filesystem::path relative_path = std::filesystem::relative(path, in_dir);
+		std::string out_dir = path + "_conv";
+
+		if (!std::filesystem::is_regular_file(path)) {
+			printf("[!] Error: rseq not found for %s\n", relative_path.string().c_str());
+			return; //continue;
+		}
+
+		size_t inputFileSize = std::filesystem::file_size(path);
+		char* stream_buffer = new char[inputFileSize];
+		{
+			std::lock_guard<std::mutex> lock(seq_mutex);
+			std::ifstream rseq_stream(path, std::ios::binary);
+			rseq_stream.read(stream_buffer, inputFileSize);
+			rseq_stream.close();
+		}
+
+		// out path
+		auto first_dir = relative_path.begin();
+		std::filesystem::path newPath = first_dir->string();
+		++first_dir;
+		for (; first_dir != relative_path.end(); ++first_dir) {
+			newPath /= *first_dir;
+		}
+		out_dir = in_dir + "\\conv\\" + newPath.string();
+
+		// bad size
+		if (inputFileSize <= sizeof(anim::v121::mstudioseqdesc_t)) {
+			printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+			return; //continue;
+		}
+
+		auto* pSeqDesc = reinterpret_cast<anim::v121::mstudioseqdesc_t*>(stream_buffer);
+
+		std::string seqname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szlabelindex);
+		std::string activityname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szactivitynameindex);
+		int numanims = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
+		int numposekeys = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
+		int numbones = static_cast<uint32_t>(rig.bones.size());
+
+		temp::Sequence seq(seqname, numbones);
+		seq.anims.reserve(24);
+		seq.path = out_dir;
+		seq.flags = pSeqDesc->flags;
+		seq.activityname = activityname;
+		seq.activity = pSeqDesc->activity;
+		seq.actweight = pSeqDesc->actweight;
+		seq.bbmin = pSeqDesc->bbmin;
+		seq.bbmax = pSeqDesc->bbmax;
+		seq.groupsize[0] = pSeqDesc->groupsize[0];
+		seq.groupsize[1] = pSeqDesc->groupsize[1];
+		seq.paramindex[0] = pSeqDesc->paramindex[0];
+		seq.paramindex[1] = pSeqDesc->paramindex[1];
+		seq.paramstart[0] = pSeqDesc->paramstart[0];
+		seq.paramstart[1] = pSeqDesc->paramstart[1];
+		seq.paramend[0] = pSeqDesc->paramend[0];
+		seq.paramend[1] = pSeqDesc->paramend[1];
+		seq.fadeintime = pSeqDesc->fadeintime;
+		seq.fadeouttime = pSeqDesc->fadeouttime;
+		seq.localentrynode = pSeqDesc->localentrynode;
+		seq.localexitnode = pSeqDesc->localexitnode;
+		seq.ikResetMask = pSeqDesc->ikResetMask;
+		seq.unk1 = pSeqDesc->unk1;
+
+		verbose("%s\n", seqname.c_str());
+
+		ParsePoseKey(pSeqDesc, seq);
+		ParseEvent(pSeqDesc, seq);
+		ParseAutoLayer(pSeqDesc, seq);
+		ParseWeightList(pSeqDesc, seq);
+		ParseActMod(pSeqDesc, seq);
+
+		// blends
+		auto* pBlends = PTR_FROM_IDX(uint16_t, stream_buffer, pSeqDesc->animindexindex);
+		std::vector<int32_t> animIndexes = GetAnimIndexes(pBlends, seq, numanims);
+		for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+			// anim 
+			auto* pAnimDesc = PTR_FROM_IDX(anim::v121::mstudioanimdesc_t, stream_buffer, animIndexes[anim_iter]);
+
+			if (pAnimDesc->flags & ANIM_DATAPOINT) {
+				PRINTANDTHROW(seq.name.c_str(), "[!] Error: Datapoint anim is not supported yet.");
+			}
+
+			char* asqd_buffer{};
+			size_t asqdFileSize = 0;
+			std::ostringstream asqd_file;
+			if (pAnimDesc->animDataAsset) {
+				asqd_file << "animseq_data/0x" << std::uppercase << std::hex << pAnimDesc->animDataAsset << std::dec << ".asqd";
+				std::string asqd_path = in_dir + "/" + asqd_file.str();
+				if (std::filesystem::exists(asqd_path)) {
+					asqdFileSize = std::filesystem::file_size(asqd_path);
+					std::ifstream asqd_stream(asqd_path, std::ios::binary);
+					asqd_buffer = new char[asqdFileSize];
+					asqd_stream.read(asqd_buffer, asqdFileSize);
+					asqd_stream.close();
+				}
+				else {
+					PRINTANDTHROW(asqd_file.str().c_str(), "[!] Error: .asqd is missing.");
+				}
+			}
+
+			temp::animdesc_t anim{};
+			anim.name = STRING_FROM_IDX(pAnimDesc, pAnimDesc->sznameindex);
+			anim.fps = pAnimDesc->fps;
+			anim.flags = pAnimDesc->flags;
+			anim.numframes = pAnimDesc->numframes;
+			anim.InitData(rig, seq.IsAdditive());
+
+			if (!(anim.flags & ANIM_VALID)) {
+				seq.anims.push_back(anim);
+				continue;
+			}
+
+			if (anim.flags & ANIM_DATAPOINT){
+			
+				printf("DATAPOINT\n");
+			
+			}
+			else {
+				// anim sections
+				uint32_t num_sections = 1;
+				int32_t* animsections{};
+				if (pAnimDesc->sectionindex) {
+					num_sections = GetSectionCount(*pAnimDesc);
+					animsections = PTR_FROM_IDX(int32_t, pAnimDesc, pAnimDesc->sectionindex);
+				}
+				uint32_t bfa_size = ((numbones + 3) / 2) & ~1;
+
+				char* extn_buffer{};
+				std::string extn_file = path + "_extn";
+				size_t extnFileSize = 0;
+				if (std::filesystem::exists(extn_file)) {
+					extnFileSize = std::filesystem::file_size(extn_file);
+					std::ifstream extn_stream(extn_file, std::ios::binary);
+					extn_buffer = new char[extnFileSize];
+					extn_stream.read(extn_buffer, extnFileSize);
+				}
+
+				uint32_t sectionbaseframe = 0;
+				for (uint32_t section = 0; section < num_sections; section++) {
+					uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+
+					char* pBoneFlagArray = reinterpret_cast<char*>(asqd_buffer);
+					if (pAnimDesc->sectionindex && section) {
+						if (animsections[section - 1] < 0) {
+							int32_t offset = -1 - animsections[section - 1];
+							if (offset >= extnFileSize) {
+								PRINTANDTHROW(extn_file.c_str(), "[!] Error: Passed the end .rseq_extn");
+							}
+							pBoneFlagArray = PTR_FROM_IDX(char, extn_buffer, offset);
+						}
+						else {
+							int32_t offset = animsections[section - 1];
+							if (offset >= asqdFileSize) {
+								PRINTANDTHROW((seq.name + ":" + asqd_file.str()).c_str(), "[!] Error: [!] Error: Passed the end of .asqd");
+							}
+							pBoneFlagArray = PTR_FROM_IDX(char, asqd_buffer, offset);
+						}
+					}
+
+					for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+						uint32_t frame = sectionbaseframe + localframe;
+						auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBoneFlagArray, bfa_size);
+						for (int bone = 0; bone < numbones; bone++) {
+							uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2));
+							Vector3& trackpos = anim.animdata[bone].pos[frame];
+							Vector3& trackrot = anim.animdata[bone].rot[frame];
+							Vector3& trackscl = anim.animdata[bone].scl[frame];
+							if (boneFlags & RLE::BONEDATA) {
+								auto* pTrackData = PTR_FROM_IDX(uint16_t, pTrack, sizeof(anim::mstudio_rle_anim_t));
+								if (boneFlags & RLE::BONEPOS) RLE::CalcBonePosition(*pTrack, &pTrackData, trackpos, localframe);
+								if (boneFlags & RLE::BONEROT) RLE::CalcBoneQuaternion(*pTrack, &pTrackData, trackrot, localframe);
+								if (boneFlags & RLE::BONESCALE) RLE::CalcBoneScale(*pTrack, &pTrackData, trackscl, localframe);
+								pTrack = (anim::mstudio_rle_anim_t*)((char*)pTrack + pTrack->size);
+							}
+						}
+					}
+					sectionbaseframe += sectionframes;
+				}
+
+				RLE::ParseIkrules_v12(pAnimDesc, anim);
+				RLE::ParseFrameMovements_v12(pAnimDesc, anim);
+			}
+			seq.anims.push_back(anim);
+		}
+		rig.sequences.push_back(seq);
+		//{
+		//	std::lock_guard<std::mutex> lock(mutex);//
+		//	rig.sequences.push_back(std::move(seq));    //rig.sequences.push_back(seq);
+		//}
+		//}));
+		if (!_enable_verbose) bar.AddAndPrint();
+	}
+	//for (auto& t : tasks) t.get();
 	printf("\n");
 }
 

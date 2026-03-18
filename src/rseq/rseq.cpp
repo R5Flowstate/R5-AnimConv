@@ -9,6 +9,7 @@ static temp::file_t LoadFile(const std::string& path) {
     
     temp::file_t f{};
 
+	f.path = path;
     f.size = std::filesystem::file_size(path);
 	f.buffer.resize(f.size);
 

@@ -97,6 +97,12 @@ namespace temp {
 		}
 	};
 
+	struct file_t {
+		std::string path;
+		std::vector<char> buffer;
+		size_t size = 0;
+	};
+
 	struct animdata_t {
 		std::vector<Vector3> pos;
 		std::vector<Vector3> rot;
@@ -146,12 +152,14 @@ namespace temp {
 		float fps = 0;
 		int32_t flags = 0;
 		int32_t numframes = 0;
-		std::vector <animdata_t> animdata;
-		std::vector<temp::ikrule_t> ikrules{};
-		framemovement_t movement{};
 		int32_t sectionstallframes = 0;
 		int32_t sectionframes = 0;
 
+		file_t asqd{};
+
+		std::vector <animdata_t> animdata;
+		std::vector<temp::ikrule_t> ikrules{};
+		framemovement_t movement{};
 		void InitData(const temp::rig_t& rig, bool badditive);
 		void SubtractBase(int32_t numbones, const temp::rig_t& rig, bool badditive);
 		bool IsAdditive() const { return flags & 0x4; }
@@ -185,18 +193,13 @@ namespace temp {
 	class Sequence {
 	public:
 		std::string path;
+		std::string outpath;
 		std::string name;
 		int32_t numbones = 0;
 		uint32_t flags = 0u;
-
 		std::string activityname;
 		int32_t activity = 0u;
 		int32_t actweight = 0u;
-
-		std::vector<float> posekeys;
-		std::vector<temp::seqevent_t> events;
-		std::vector<temp::autolayer_t> autolayers;
-		std::vector<temp::actmod_t> actmods;
 		Vector3 bbmin{};
 		Vector3 bbmax{};
 		int32_t groupsize[2] = { 0, 0 };
@@ -220,8 +223,14 @@ namespace temp {
 		int32_t unk1 = 0;
 		// weightfixup
 
-		std::vector<float> weightlist;
+		file_t extn{};
+
 		int32_t numuniqueblends = 0u;
+		std::vector<float> posekeys;
+		std::vector<temp::seqevent_t> events;
+		std::vector<temp::autolayer_t> autolayers;
+		std::vector<temp::actmod_t> actmods;
+		std::vector<float> weightlist;
 		std::vector<uint32_t> blends;
 		std::vector<temp::animdesc_t> anims;
 
@@ -347,7 +356,7 @@ namespace temp {
 inline void temp::animdesc_t::InitData(const temp::rig_t& rig, bool badditive) {
 	const Vector3 zero(0, 0, 0);
 	const Vector3 one(1, 1, 1);
-	const uint16_t numbones = rig.bones.size();
+	const uint16_t numbones = uint16_t(rig.bones.size());
 	animdata.resize(numbones);
 
 	for (int i = 0; i < numbones; ++i) {

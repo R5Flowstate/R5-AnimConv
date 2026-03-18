@@ -158,7 +158,7 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 		//header
 		temp::Sequence seq(seqdescname, pMdlHdr->numbones);
 		seq.anims.reserve(24);
-		seq.path = output_dir + "/" + seqdescname;
+		seq.outpath = output_dir + "/" + seqdescname;
 		seq.flags = seqDesc->flags;
 		seq.activityname = STRING_FROM_IDX(pSeqBase, seqDesc->szactivitynameindex);
 		seq.activity = seqDesc->activity;
@@ -520,7 +520,7 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 		//header
 		temp::Sequence seq(seqdescname, pMdlHdr->numbones);
 		seq.anims.reserve(24);
-		seq.path = output_dir + "/" + seqdescname;
+		seq.outpath = output_dir + "/" + seqdescname;
 		seq.flags = seqDesc->flags;
 		seq.activityname = STRING_FROM_IDX(pSeqBase, seqDesc->szactivitynameindex);
 		seq.activity = seqDesc->activity;

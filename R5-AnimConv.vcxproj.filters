@@ -1,122 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\assets">
-      <UniqueIdentifier>{3fb0ea49-0392-47ee-89a4-c85636a1b604}</UniqueIdentifier>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\utils">
-      <UniqueIdentifier>{6445f95b-73fd-4a0c-aa1a-fc9e72f55d85}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\utils">
-      <UniqueIdentifier>{2e77228e-26ac-46a1-8ff2-ad474ff46356}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\assets">
-      <UniqueIdentifier>{ec28cf1c-8dd2-40ae-98c9-a0da3267dc4b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\core">
+    <Filter Include="src\core">
       <UniqueIdentifier>{6c5a547d-856f-40c0-b89c-0e6a5ebc0f0e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\mdl">
+      <UniqueIdentifier>{ec28cf1c-8dd2-40ae-98c9-a0da3267dc4b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\rrig">
+      <UniqueIdentifier>{3fb0ea49-0392-47ee-89a4-c85636a1b604}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\rseq">
+      <UniqueIdentifier>{2e77228e-26ac-46a1-8ff2-ad474ff46356}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\utils">
+      <UniqueIdentifier>{6445f95b-73fd-4a0c-aa1a-fc9e72f55d85}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
+
   <ItemGroup>
-    <ClCompile Include="R5-AnimConv.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\utils\print.cpp">
-      <Filter>Source Files\utils</Filter>
-    </ClCompile>
-    <ClCompile Include="src\rseq\rseq.cpp">
-      <Filter>Source Files\assets</Filter>
-    </ClCompile>
-    <ClCompile Include="src\rrig\rrig.cpp">
-      <Filter>Source Files\assets</Filter>
-    </ClCompile>
+    <ClCompile Include="R5-AnimConv.cpp" />
+    <ClInclude Include="resource.h" />
+    
     <ClCompile Include="src\pch.cpp">
-      <Filter>Header Files</Filter>
+      <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\utils\math_helper.cpp">
-      <Filter>Source Files\utils</Filter>
-    </ClCompile>
-    <ClCompile Include="src\rseq\rseq_functions.cpp">
-      <Filter>Source Files\assets</Filter>
-    </ClCompile>
-    <ClCompile Include="src\utils\rson_parser.cpp">
-      <Filter>Source Files\utils</Filter>
-    </ClCompile>
-    <ClCompile Include="src\mdl\mdl.cpp">
-      <Filter>Source Files\assets</Filter>
-    </ClCompile>
-    <ClCompile Include="src\utils\misc.cpp">
-      <Filter>Source Files\utils</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="src\mdl\studio.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mdl\studio_p2.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mdl\studio_r2.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mdl\studio_r5.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utils\print.h">
-      <Filter>Header Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="src\rrig\rrig.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="src\rseq\rseq.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
     <ClInclude Include="src\pch.h">
-      <Filter>Header Files</Filter>
+      <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\utils\rson_parser.h">
-      <Filter>Header Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="src\mdl\mdl.h">
-      <Filter>Header Files\assets</Filter>
-    </ClInclude>
-    <ClInclude Include="resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utils\misc.h">
-      <Filter>Header Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\cli.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\macros.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\math_functions.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\math_types.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\parsers.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\types.h">
-      <Filter>Header Files\core</Filter>
-    </ClInclude>
+
+    <ClInclude Include="src\core\cli.h"><Filter>src\core</Filter></ClInclude>
+    <ClInclude Include="src\core\macros.h"><Filter>src\core</Filter></ClInclude>
+    <ClInclude Include="src\core\math_functions.h"><Filter>src\core</Filter></ClInclude>
+    <ClInclude Include="src\core\math_types.h"><Filter>src\core</Filter></ClInclude>
+    <ClInclude Include="src\core\parsers.h"><Filter>src\core</Filter></ClInclude>
+    <ClInclude Include="src\core\types.h"><Filter>src\core</Filter></ClInclude>
+
+    <ClCompile Include="src\mdl\mdl.cpp"><Filter>src\mdl</Filter></ClCompile>
+    <ClInclude Include="src\mdl\mdl.h"><Filter>src\mdl</Filter></ClInclude>
+    <ClInclude Include="src\mdl\studio.h"><Filter>src\mdl</Filter></ClInclude>
+    <ClInclude Include="src\mdl\studio_p2.h"><Filter>src\mdl</Filter></ClInclude>
+    <ClInclude Include="src\mdl\studio_r2.h"><Filter>src\mdl</Filter></ClInclude>
+    <ClInclude Include="src\mdl\studio_r5.h"><Filter>src\mdl</Filter></ClInclude>
+
+    <ClCompile Include="src\rrig\rrig.cpp"><Filter>src\rrig</Filter></ClCompile>
+    <ClInclude Include="src\rrig\rrig.h"><Filter>src\rrig</Filter></ClInclude>
+
+    <ClCompile Include="src\rseq\rseq.cpp"><Filter>src\rseq</Filter></ClCompile>
+    <ClCompile Include="src\rseq\rseq_functions.cpp"><Filter>src\rseq</Filter></ClCompile>
+    <ClInclude Include="src\rseq\rseq.h"><Filter>src\rseq</Filter></ClInclude>
+
+    <ClCompile Include="src\utils\math_helper.cpp"><Filter>src\utils</Filter></ClCompile>
+    <ClCompile Include="src\utils\misc.cpp"><Filter>src\utils</Filter></ClCompile>
+    <ClCompile Include="src\utils\print.cpp"><Filter>src\utils</Filter></ClCompile>
+    <ClCompile Include="src\utils\rson_parser.cpp"><Filter>src\utils</Filter></ClCompile>
+    <ClInclude Include="src\utils\misc.h"><Filter>src\utils</Filter></ClInclude>
+    <ClInclude Include="src\utils\print.h"><Filter>src\utils</Filter></ClInclude>
+    <ClInclude Include="src\utils\rson_parser.h"><Filter>src\utils</Filter></ClInclude>
   </ItemGroup>
+
   <ItemGroup>
     <ResourceCompile Include="R5-AnimConv.rc">
       <Filter>Resource Files</Filter>

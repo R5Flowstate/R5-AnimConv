@@ -30,6 +30,25 @@ namespace r5 {
 			int32_t isExternal;
 		};
 
+		struct AxisFixup_t {
+			int8_t adjustment[3];
+		};
+
+		struct AnimQuat32 {
+			int32_t  value0 : 7;
+			int32_t  value1 : 7;
+			int32_t  value2 : 7;
+			uint32_t scaleFactor : 3;
+			uint32_t droppedAxis : 2;
+			uint32_t numInterpFrames : 6;
+		};
+
+		struct AnimPos64 {
+			int16_t  values[3];
+			uint16_t scaleFactor : 9;
+			uint16_t numInterpFrames : 7;
+		};
+
 		namespace v7 {
 			struct mstudioframemovement_t {
 				Vector4 scale;
@@ -286,24 +305,24 @@ namespace r5 {
 		}
 
 		namespace v11 {
-			struct mstudioseqdesc_t{
+			struct mstudioseqdesc_t {
 				uint16_t szlabelindex;
 				uint16_t szactivitynameindex;
 				int flags;
-				uint16_t activity; 
+				uint16_t activity;
 				uint16_t actweight;
 				uint16_t numevents;
 				uint16_t eventindex;
-				Vector3 bbmin; 
+				Vector3 bbmin;
 				Vector3 bbmax;
 				uint16_t numblends;
 				uint16_t animindexindex;
 				short paramindex[2];
 				float paramstart[2];
-				float paramend[2]; 
+				float paramend[2];
 				float fadeintime;
 				float fadeouttime;
-				uint16_t localentrynode; 
+				uint16_t localentrynode;
 				uint16_t localexitnode;
 				uint16_t numikrules;
 				uint16_t numautolayers;
@@ -314,32 +333,32 @@ namespace r5 {
 				uint16_t numiklocks;
 				uint16_t iklockindex;
 				uint16_t unk_5C;
-				uint16_t cycleposeindex; 
+				uint16_t cycleposeindex;
 				uint16_t activitymodifierindex;
 				uint16_t numactivitymodifiers;
-				int ikResetMask; 
+				int ikResetMask;
 				int unk1;
 				uint16_t weightFixupOffset;
 				uint16_t weightFixupCount;
 			};
 
-			struct mstudioautolayer_t{
+			struct mstudioautolayer_t {
 				uint64_t guidSequence;
 				int iPose;
 				int flags;
 				float start;
-				float peak;	
+				float peak;
 				float tail;
 				float end;
 			};
 
-			struct mstudioactivitymodifier_t{
+			struct mstudioactivitymodifier_t {
 				uint16_t sznameindex;
-				bool negate; 
+				bool negate;
 				char pad;
 			};
 
-			struct mstudioseqweightfixup_t{
+			struct mstudioseqweightfixup_t {
 				float unk_0;
 				int bone;
 				float unk_8;
@@ -348,7 +367,7 @@ namespace r5 {
 				float unk_14;
 			};
 
-			struct mstudioikrule_t{
+			struct mstudioikrule_t {
 				short chain;
 				short bone;
 				char type;
@@ -358,13 +377,13 @@ namespace r5 {
 				uint16_t compressedikerrorindex;
 				short iStart;
 				uint16_t ikerrorindex;
-				uint16_t szattachmentindex; 
+				uint16_t szattachmentindex;
 				float start;
 				float peak;
 				float tail;
 				float end;
-				float contact; 
-				float drop; 
+				float contact;
+				float drop;
 				float top;
 				float height;
 				float endHeight;
@@ -374,7 +393,7 @@ namespace r5 {
 				Quaternion q;
 			};
 
-			struct mstudioframemovement_t{
+			struct mstudioframemovement_t {
 				float scale[4];
 				int sectionframes;
 			};
@@ -388,7 +407,7 @@ namespace r5 {
 				int16_t szeventindex;
 			};
 
-			struct mstudioanimdesc_t{
+			struct mstudioanimdesc_t {
 				float fps;
 				int flags;
 				int numframes;
@@ -404,7 +423,7 @@ namespace r5 {
 				uint16_t sectionframes;
 			};
 		}
-		
+
 		namespace v12 {
 			struct mstudioseqdesc_t {
 				int16_t szlabelindex;
@@ -496,7 +515,7 @@ namespace r5 {
 		}
 
 		namespace v121 {
-			struct mstudioseqdesc_t{
+			struct mstudioseqdesc_t {
 				uint16_t szlabelindex;
 				uint16_t szactivitynameindex;
 				int32_t flags;
@@ -535,8 +554,8 @@ namespace r5 {
 				uint16_t noInterpFrameCount;
 			};
 
-			struct mstudioautolayer_t{
-				uint64_t iSequence; 
+			struct mstudioautolayer_t {
+				uint64_t iSequence;
 				int32_t iPose;
 				int32_t flags;
 				float start;
@@ -554,7 +573,7 @@ namespace r5 {
 				float unk_14;
 			};
 
-			struct mstudio_nointerpframes_t{
+			struct mstudio_nointerpframes_t {
 				int32_t firstFrame;
 				int32_t lastFrame;
 			};
@@ -1376,7 +1395,7 @@ namespace r5 {
 		struct studiohdr_t {
 			int flags;
 			int checksum;
-			uint16_t sznameindex; 
+			uint16_t sznameindex;
 			char name[33];
 			uint8_t surfacepropLookup;
 			float mass;
@@ -1389,7 +1408,7 @@ namespace r5 {
 			Vector3 hull_max;
 			Vector3 view_bbmin;
 			Vector3 view_bbmax;
-			uint16_t boneCount; 
+			uint16_t boneCount;
 			uint16_t boneHdrOffset;
 			uint16_t boneDataOffset;
 			uint16_t numlocalseq;
@@ -1437,10 +1456,10 @@ namespace r5 {
 			uint16_t boneFollowerCount;
 			uint16_t boneFollowerOffset;
 			uint16_t bvhOffset;
-			char bvhUnk[2]; 
+			char bvhUnk[2];
 			uint16_t unkDataCount;
 			uint16_t unkDataOffset;
-			uint16_t unkStrcOffset; 
+			uint16_t unkStrcOffset;
 			int unk_E0;
 		};
 	}
@@ -1515,7 +1534,7 @@ namespace r5 {
 			uint16_t unkStrcOffset;
 			int32_t unk_E0;
 		};
-	
+
 		struct mstudiobonedata_t {
 			int16_t parent;
 			uint16_t unk_76;

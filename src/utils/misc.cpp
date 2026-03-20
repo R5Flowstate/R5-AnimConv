@@ -14,7 +14,7 @@ void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, st
 				std::filesystem::path relative_path = std::filesystem::relative(entry.path(), in_dir);
 				auto first_dir = relative_path.begin();
 
-				if (first_dir->string() != "conv") {
+				if (!first_dir->string().starts_with("conv")) {
 					temp::rig_t r{};
 					r.rrigpath = entry.path().string();
 					rrig.push_back(r);

@@ -123,8 +123,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v10::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n",
-                       std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -243,8 +242,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v11::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n",
-                       std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -347,8 +345,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v12::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n",
-                    std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -459,8 +456,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v121::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n",
-                       std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 

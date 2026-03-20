@@ -346,9 +346,9 @@ namespace temp {
 	};
 
 	struct animblock_t {
-		uint8_t comptype;
-		uint32_t startframe;
-		uint32_t endframe;
+		uint8_t type;
+		int32_t start;
+		int32_t end;
 	};
 
 }

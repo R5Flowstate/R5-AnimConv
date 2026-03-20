@@ -112,8 +112,7 @@ int RLE::GetAnimValueOffset(const r5::anim::mstudioanimvalue_t* const panimvalue
          + ((s_AnimSeekLUT[lutBaseIdx + 1] + panimvalue->meta.total * s_AnimSeekLUT[lutBaseIdx + 2]) >> 4);
 }
 
-void RLE::ExtractAnimValue(const r5::anim::mstudioanimvalue_t* panimvalue, const int frame,
-                           const float scale, float& v1) {
+void RLE::ExtractAnimValue(const r5::anim::mstudioanimvalue_t* panimvalue, const int frame, const float scale, float& v1) {
     switch (panimvalue->meta.type) {
     case 0:
         v1 = static_cast<float>(panimvalue[frame + 1].value) * scale;
@@ -159,8 +158,7 @@ void RLE::ExtractAnimValue(const r5::anim::mstudioanimvalue_t* panimvalue, const
     }
 }
 
-void p2::RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue,
-                               float scale, float& v1) {
+void p2::RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1) {
     if (!panimvalue) { v1 = 0; return; }
 
     int k = frame;
@@ -175,8 +173,7 @@ void p2::RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* pa
        : panimvalue[panimvalue->meta.type].value * scale;
 }
 
-void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue,
-                           float scale, float& v1) {
+void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1) {
     int k = frame;
     while (panimvalue->meta.total <= k) {
         k -= panimvalue->meta.total;
@@ -185,8 +182,7 @@ void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimv
     RLE::ExtractAnimValue(panimvalue, k, scale, v1);
 }
 
-void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue,
-                           float scale, float& v1, float& v2) {
+void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1, float& v2) {
     int k = frame;
     while (panimvalue->meta.total <= k) {
         k -= panimvalue->meta.total;
@@ -230,8 +226,7 @@ void RLE::CalcBonePosition(const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t**
     *BoneTrackData += 4;
 }
 
-void RLE::CalcBoneQuaternion(const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t** BoneTrackData,
-                             Vector3& trackval, uint32_t localframe) {
+void RLE::CalcBoneQuaternion(const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t** BoneTrackData, Vector3& trackval, uint32_t localframe) {
     if (!pAnim.bAnimRotation) {
         Quaternion64* q64 = reinterpret_cast<Quaternion64*>(*BoneTrackData);
         trackval = UnpackQuat64(*q64).ToRad();
@@ -306,8 +301,7 @@ int r5::DP::ResolveFrameIndex(const int localFrame, const TIndexType total, cons
     return lo;
 }
 
-void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** panimtrack,
-    const int localFrame, Quaternion& q) {
+void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** panimtrack, const int localFrame, Quaternion& q) {
     const uint8_t* ptrack = *panimtrack;
 
     const uint8_t  valid = ptrack[0];
@@ -323,8 +317,7 @@ void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** pani
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
 
-void r5::DP::CalcBonePosition_DP(const int sectionlength, const uint8_t** panimtrack,
-    const int localFrame, Vector3& pos) {
+void r5::DP::CalcBonePosition_DP(const int sectionlength, const uint8_t** panimtrack, const int localFrame, Vector3& pos) {
     const uint8_t* ptrack = *panimtrack;
 
     const uint8_t  valid = ptrack[0];
@@ -344,8 +337,7 @@ void r5::DP::CalcBonePosition_DP(const int sectionlength, const uint8_t** panimt
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
 
-void r5::DP::CalcBonePositionVirtual_DP(const int sectionlength, const uint8_t** panimtrack,
-    const int localFrame, Vector3& pos) {
+void r5::DP::CalcBonePositionVirtual_DP(const int sectionlength, const uint8_t** panimtrack, const int localFrame, Vector3& pos) {
     const uint8_t* ptrack = *panimtrack;
 
     const uint8_t  total = ptrack[0];
@@ -362,8 +354,7 @@ void r5::DP::CalcBonePositionVirtual_DP(const int sectionlength, const uint8_t**
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
 
-void r5::DP::CalcBoneScale_DP(const int sectionlength, const uint8_t** panimtrack,
-    const int localFrame, Vector3& scale) {
+void r5::DP::CalcBoneScale_DP(const int sectionlength, const uint8_t** panimtrack, const int localFrame, Vector3& scale) {
     const uint8_t* ptrack = *panimtrack;
 
     const uint8_t  total = ptrack[0];
@@ -961,151 +952,311 @@ template void RLE::ParseFrameMovements<r5::anim::v11::mstudioanimdesc_t> (const 
 template void RLE::ParseFrameMovements<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
 
+
 // ============================================================================
 //  Write helpers
 // ============================================================================
 
-/* TODO: rewrite to support more than 3 compression types */
+static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& coeffs_out, float& max_err_out) {
+    const int nc = deg + 1;
+    std::vector<double> ATA(nc * nc, 0.0), ATb(nc, 0.0);
+    for (int f = 0; f < N; f++) {
+        const double t = (N > 1) ? (double)f / (N - 1) : 0.0;
+        double row[6]; row[0] = 1.0;
+        for (int d = 1; d < nc; d++) row[d] = row[d - 1] * t;
+        for (int r = 0; r < nc; r++) {
+            ATb[r] += row[r] * vals[f];
+            for (int c = 0; c < nc; c++) ATA[r * nc + c] += row[r] * row[c];
+        }
+    }
+
+    std::vector<double> aug(nc * (nc + 1));
+    for (int r = 0; r < nc; r++) {
+        for (int c = 0; c < nc; c++) aug[r * (nc + 1) + c] = ATA[r * nc + c];
+        aug[r * (nc + 1) + nc] = ATb[r];
+    }
+    for (int col = 0; col < nc; col++) {
+        int pivot = col;
+        for (int r = col + 1; r < nc; r++)
+            if (std::abs(aug[r * (nc + 1) + col]) > std::abs(aug[pivot * (nc + 1) + col])) pivot = r;
+        if (pivot != col)
+            for (int c = 0; c <= nc; c++) std::swap(aug[col * (nc + 1) + c], aug[pivot * (nc + 1) + c]);
+        const double den = aug[col * (nc + 1) + col];
+        if (std::abs(den) < 1e-12) continue;
+        for (int r = col + 1; r < nc; r++) {
+            const double f = aug[r * (nc + 1) + col] / den;
+            for (int c = col; c <= nc; c++) aug[r * (nc + 1) + c] -= f * aug[col * (nc + 1) + c];
+        }
+    }
+    std::vector<double> x(nc, 0.0);
+    for (int r = nc - 1; r >= 0; r--) {
+        double v = aug[r * (nc + 1) + nc];
+        for (int c = r + 1; c < nc; c++) v -= aug[r * (nc + 1) + c] * x[c];
+        x[r] = (std::abs(aug[r * (nc + 1) + r]) > 1e-12) ? v / aug[r * (nc + 1) + r] : 0.0;
+    }
+    coeffs_out.resize(nc);
+    for (int i = 0; i < nc; i++) coeffs_out[i] = (int16_t)std::round(x[i]);
+
+    max_err_out = 0.0f;
+    for (int f = 0; f < N; f++) {
+        const double t = (N > 1) ? (double)f / (N - 1) : 0.0;
+        double tpow = 1.0, v = coeffs_out[0];
+        for (int i = 1; i < nc; i++) { tpow *= t; v += coeffs_out[i] * tpow; }
+        max_err_out = std::max(max_err_out, (float)std::abs(v - vals[f]));
+    }
+}
+
 template<typename TVecType>
-void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata,
-                         temp::animblock_t c, int axis, float scale) {
-    const int framerange = c.endframe - c.startframe;
+static uint8_t ChooseBestType(const std::vector<TVecType>& raw, uint32_t start, uint32_t end, int axis, float scale, std::vector<int16_t>* coeffs_out = nullptr) {
+    const int N = (int)(end - start);
+    if (N <= 0) return 0;
 
-    auto* valueRLE  = reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData);
-    char* cValueRLE = reinterpret_cast<char*>((char*)valueRLE + 4);
-    pData += sizeof(r5::anim::mstudioanimvalue_t);
+    std::vector<int16_t> qv(N);
+    for (int i = 0; i < N; i++)
+        qv[i] = (int16_t)std::round(raw[start + i][axis] / scale);
 
-    valueRLE->meta.type  = c.comptype;
-    valueRLE->meta.total = framerange;
+    bool constant = true;
+    for (int i = 1; i < N; i++) if (qv[i] != qv[0]) { constant = false; break; }
+    if (constant && N >= 3) return 2;
+    if (N <= 2) return 0;
 
-    const int16_t base = (int16_t)(rawdata[c.startframe][axis] / scale);
+    bool fits = true;
+    for (int i = 1; i < N; i++) {
+        int d = (int)qv[i] - (int)qv[0];
+        if (d < -128 || d > 127) { 
+            fits = false; break; 
+        }
+    }
+    if (fits) return 1;
+    
 
-    switch (c.comptype) {
-    case 0:
-        for (int i = 0; i < framerange; i++) {
-            valueRLE[i + 1].value = (int16_t)(rawdata[c.startframe + i][axis] / scale);
-            pData += sizeof(int16_t);
+    uint8_t best_type = 0;
+    int     best_sz = 2 + N * 2;
+    for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
+        std::vector<int16_t> coeffs;
+        float max_err;
+        FitPoly(qv.data(), N, deg, coeffs, max_err);
+        if (max_err < 0.5f) {
+            const int poly_sz = 2 + (1 + deg) * 2;
+            if (poly_sz < best_sz) {
+                best_sz = poly_sz;
+                best_type = (uint8_t)(2 + deg);
+                if (coeffs_out) *coeffs_out = coeffs;
+            }
+            break;
+        }
+    }
+    return best_type;
+}
+
+template<typename TVecType>
+void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, temp::animblock_t c, int axis, float scale, const std::vector<int16_t>* poly_coeffs) { 
+    const int N = (int)(c.end - c.start);
+
+    auto* hdr = reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData);
+    pData += 2;
+    hdr->meta.type = c.type;
+    hdr->meta.total = (uint8_t)N;
+
+    switch (c.type) {
+    case 0: {
+        for (int i = 0; i < N; i++) {
+            reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = (int16_t)std::round(rawdata[c.start + i][axis] / scale);
+            pData += 2;
         }
         break;
-
-    case 1:
-        valueRLE[1].value = base;
-        pData += sizeof(int16_t);
-        for (int i = 0; i < framerange - 1; i++)
-            cValueRLE[i] = (int16_t)(rawdata[c.startframe + i + 1][axis] / scale) - base;
-        pData += (framerange - 1) * sizeof(int8_t);
-        break;
-
-    case 2:
-        valueRLE[1].value = base;
-        pData += sizeof(int16_t);
-        break;
-
-    default:
-        std::cerr << "[!] Error: anim data compress type is invalid.\n";
+    }
+    case 1: {
+        const int16_t base = (int16_t)std::round(rawdata[c.start][axis] / scale);
+        reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = base;
+        pData += 2;
+        for (int i = 1; i < N; i++) {
+            const int16_t v = (int16_t)std::round(rawdata[c.start + i][axis] / scale);
+            *reinterpret_cast<int8_t*>(pData) = (int8_t)(v - base);
+            pData += 1;
+        }
         break;
     }
+    case 2: {
+        const int16_t base = (int16_t)std::round(rawdata[c.start][axis] / scale);
+        reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = base;
+        pData += 2;
+        break;
+    }
+    default: {
+        if (poly_coeffs && !poly_coeffs->empty()) {
+            for (int16_t coeff : *poly_coeffs) {
+                reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = coeff;
+                pData += 2;
+            }
+        }
+        break;
+    }
+    }
+    
     ALIGN2(pData);
 }
-template void WriteCompressedAnim<Vector3>(char*&, const std::vector<Vector3>&, temp::animblock_t, int, float);
-template void WriteCompressedAnim<Vector4>(char*&, const std::vector<Vector4>&, temp::animblock_t, int, float);
-
-
-template<typename TVecType>
-static void FindConstantRanges(const std::vector<TVecType>& raw, int axis, float eps,
-                               std::vector<temp::animblock_t>& out, uint32_t start, uint32_t end) {
-    uint32_t i = start;
-    while (i < end) {
-        const float ref = raw[i][axis];
-        uint32_t j = i + 1;
-        while (j < end && raw[j][axis] == ref) j++;
-
-        if (j - i >= 3)
-            out.push_back({ 2, i, j });
-        i = j;
-    }
-}
-
-template<typename TVecType>
-static void FindDiffRanges(const std::vector<TVecType>& raw, int axis, float threshold,
-                           std::vector<temp::animblock_t>& out, uint32_t start, uint32_t end,
-                           const std::vector<temp::animblock_t>& existing) {
-    auto isCovered = [&](uint32_t f) {
-        for (auto& b : existing)
-            if (f >= b.startframe && f < b.endframe) return true;
-        return false;
-    };
-
-    uint32_t i = start;
-    while (i < end) {
-        if (isCovered(i)) { i++; continue; }
-
-        const float ref = raw[i][axis];
-        float vmin = ref, vmax = ref;
-        uint32_t j = i + 1;
-
-        while (j < end && !isCovered(j)) {
-            const float v = raw[j][axis];
-            vmin = std::min(vmin, v);
-            vmax = std::max(vmax, v);
-            if ((ref - vmin) >= threshold || (vmax - ref) >= threshold) break;
-            j++;
-        }
-
-        if (j - i >= 3)
-            out.push_back({ 1, i, j });
-        i = j;
-    }
-}
+template void WriteCompressedAnim<Vector3>(char*&, const std::vector<Vector3>&, temp::animblock_t, int, float, const std::vector<int16_t>*);
+template void WriteCompressedAnim<Vector4>(char*&, const std::vector<Vector4>&, temp::animblock_t, int, float, const std::vector<int16_t>*);
 
 template<typename TVecType>
 void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t startframe, uint32_t endframe, int axis, float scale) {
-    const float threshold = 127.0f * scale;
+    if (startframe >= endframe) return;
 
-    std::vector<temp::animblock_t> blocks;  blocks.reserve(64);
-    std::vector<temp::animblock_t> merged;  merged.reserve(64);
-    std::vector<temp::animblock_t> final_;  final_.reserve(64);
+    const int total_frames = (int)(endframe - startframe);
+    std::vector<int16_t> qv(total_frames);
+    for (int i = 0; i < total_frames; i++)
+        qv[i] = (int16_t)std::round(rawdata[startframe + i][axis] / scale);
 
-    FindConstantRanges(rawdata, axis, scale, blocks, startframe, endframe);
-    FindDiffRanges    (rawdata, axis, threshold, blocks, startframe, endframe, blocks);
-
-    std::sort(blocks.begin(), blocks.end(), [](auto& a, auto& b) { return a.startframe < b.startframe; });
-
-    uint32_t pos = startframe;
-    for (auto& b : blocks) {
-        if (pos < b.startframe) merged.push_back({ 0, pos, b.startframe });
-        merged.push_back(b);
-        pos = b.endframe;
-    }
-    if (pos < endframe) merged.push_back({ 0, pos, endframe });
-
-    for (auto& b : merged) {
-        if (!final_.empty() &&
-            final_.back().comptype == 0 && b.comptype == 0 &&
-            final_.back().endframe == b.startframe) {
-            final_.back().endframe = b.endframe;
+    auto is_constant = [&](int a, int b) {
+        for (int i = a + 1; i < b; i++) if (qv[i] != qv[a]) return false;
+        return true;
+        };
+    auto t1_fits = [&](int a, int b) {
+        for (int i = a + 1; i < b; i++) {
+            int d = (int)qv[i] - (int)qv[a];
+            if (d < -128 || d > 127) return false;
         }
-        else {
-            final_.push_back(b);
+        return true;
+        };
+    auto block_type = [&](int a, int b) -> uint8_t {
+        const int N = b - a;
+        if (N <= 0) return 0;
+        if (N <= 2) return 0;
+        if (is_constant(a, b) && N >= 3) return 2;
+        if (t1_fits(a, b)) return 1;
+        return 0; 
+        };
+
+    std::vector<temp::animblock_t> raw_blocks;
+    raw_blocks.reserve(64);
+
+    int pos = 0;
+    while (pos < total_frames) {
+        if (pos + 2 < total_frames) {
+            int cend = pos + 1;
+            while (cend < total_frames && qv[cend] == qv[pos]) cend++;
+            if (cend - pos >= 3) {
+                raw_blocks.push_back({ 2, pos, cend });
+                pos = cend;
+                continue;
+            }
         }
+
+        if (pos + 2 < total_frames && t1_fits(pos, pos + 3)) {
+            int tend = pos + 3;
+            while (tend < total_frames && t1_fits(pos, tend + 1)) tend++;
+            raw_blocks.push_back({ 1, pos, tend });
+            pos = tend;
+            continue;
+        }
+
+        int rend = pos + 1;
+        while (rend < total_frames) {
+            if (rend + 2 < total_frames && is_constant(rend, rend + 3)) break;
+            if (rend + 2 < total_frames && t1_fits(rend, rend + 3)) break;
+            rend++;
+        }
+        raw_blocks.push_back({ 0, pos, rend });
+        pos = rend;
     }
 
-    for (auto& c : final_)
-        WriteCompressedAnim(pData, rawdata, c, axis, scale);
+    std::vector<temp::animblock_t> final_blocks;
+    final_blocks.reserve(raw_blocks.size() * 2);
+
+    for (auto& rb : raw_blocks) {
+        if (rb.type != 1) { final_blocks.push_back(rb); continue; }
+
+        const int a = rb.start, b = rb.end;
+        const int nDiffs = b - a - 1;
+
+        int best_pi = -1, best_plen = 0, best_save = 0;
+        int i = 0;
+        while (i < nDiffs) {
+            const int16_t d = (int16_t)((int)qv[a + i + 1] - (int)qv[a]);
+            int plen = 1;
+            while (i + plen < nDiffs && (int16_t)((int)qv[a + i + plen + 1] - (int)qv[a]) == d)
+                plen++;
+            const int net = plen - 4
+                - (i > 0 ? 4 : 0)
+                - (i + plen < nDiffs ? 4 : 0);
+            if (net > best_save) { best_save = net; best_pi = i; best_plen = plen; }
+            i += plen;
+        }
+
+        if (best_pi < 0) { final_blocks.push_back(rb); continue; }
+
+        const int16_t pval = (int16_t)((int)qv[a] + (int)((int16_t)((int)qv[a + best_pi + 1] - (int)qv[a])));
+        int pframe_start = a + best_pi + 1;
+        int pframe_end = a + best_pi + best_plen + 1;
+
+        if (best_pi == 0 && qv[a] == pval) pframe_start = a;
+
+        if (pframe_start > a)   final_blocks.push_back({ 1, a,             pframe_start });
+        final_blocks.push_back({ 2, pframe_start, pframe_end });
+        if (pframe_end < b)   final_blocks.push_back({ 1, pframe_end,    b });
+    }
+
+    std::vector<temp::animblock_t> merged;
+    merged.reserve(final_blocks.size());
+    for (auto& rb : final_blocks) {
+        if (!merged.empty() && merged.back().type == 0 && rb.type == 0 &&
+            merged.back().end == rb.start)
+            merged.back().end = rb.end;
+        else
+            merged.push_back(rb);
+    }
+
+    std::vector<std::pair<temp::animblock_t, std::vector<int16_t>>> emit_list;
+    emit_list.reserve(merged.size());
+
+    for (auto& rb : merged) {
+        std::vector<int16_t> coeffs;
+        if (rb.type == 0) {
+            const int N = rb.end - rb.start;
+            if (N > 2) {
+                std::vector<int16_t> slice(qv.begin() + rb.start, qv.begin() + rb.end);
+                int best_sz = 2 + N * 2;
+                uint8_t best_t = 0;
+                for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(slice.data(), N, deg, c, err);
+                    if (err < 0.5f) {
+                        const int poly_sz = 2 + (1 + deg) * 2;
+                        if (poly_sz < best_sz) {
+                            best_sz = poly_sz; best_t = (uint8_t)(2 + deg); coeffs = c;
+                        }
+                        break;
+                    }
+                }
+                if (best_t != 0) {
+                    emit_list.push_back({ { best_t, rb.start, rb.end }, coeffs });
+                    continue;
+                }
+            }
+        }
+        emit_list.push_back({ rb, {} });
+    }
+
+    for (auto& [rb, coeffs] : emit_list) {
+        temp::animblock_t ab{ rb.type, (uint32_t)(startframe + rb.start), (uint32_t)(startframe + rb.end) };
+        const std::vector<int16_t>* pc = coeffs.empty() ? nullptr : &coeffs;
+        WriteCompressedAnim(pData, rawdata, ab, axis, scale, pc);
+    }
 }
 template void WriteAnimData<Vector3>(char*&, const std::vector<Vector3>&, const uint32_t, const uint32_t, int, float);
 template void WriteAnimData<Vector4>(char*&, const std::vector<Vector4>&, const uint32_t, const uint32_t, int, float);
 
-void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr,
-               std::vector<Vector3> rawdata, int32_t startframe, int32_t endframe, float scale) {
+void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, std::vector<Vector3> rawdata, int32_t startframe, int32_t endframe, float scale) {
     animvalueptr->offset = pData - (char*)animvalueptr;
 
-    uint8_t  tmp      = 0;
+    uint8_t  tmp = 0;
     uint8_t* offsets[] = { &tmp, &animvalueptr->idx1, &animvalueptr->idx2 };
     char* beginaddress = pData;
 
     for (int axis = 0; axis < 3; axis++) {
-        if (allEqualVector(rawdata, startframe, endframe, axis, scale) && rawdata[startframe][axis] == 0)
+        if (allEqualVector(rawdata, startframe, endframe, axis, scale) && (int16_t)std::round(rawdata[startframe][axis] / scale) == 0)
             continue;
 
         animvalueptr->flags |= (4 >> axis);

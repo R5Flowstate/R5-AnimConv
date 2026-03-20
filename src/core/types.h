@@ -15,64 +15,29 @@ namespace temp {
 	};
 
 	class StringTable {
+		std::unordered_map<std::string, int> dedup;
 	public:
 		std::vector<stringentry_t> stringTable;
 
 		void Init() {
 			stringTable.clear();
 			stringTable.emplace_back(stringentry_t{ NULL, NULL, NULL, "", -1 });
+			dedup.clear();
+			dedup.emplace("", 0);
 		}
 
 		template<typename T>
 		void Add(T* base, int* ptr, std::string str) {
 			if (str.empty()) str = "";
-			stringentry_t newString{};
-
-			int i = 0;
-			for (auto& it : stringTable) {
-				if ((str == it.string)) {
-					newString.base = (char*)base;
-					newString.ptr = ptr;
-					newString.string = str;
-					newString.dupindex = i;
-					stringTable.emplace_back(newString);
-					return;
-				}
-				i++;
-			}
-
-			newString.base = (char*)base;
-			newString.ptr = ptr;
-			newString.string = str;
-			newString.dupindex = -1;
-
-			stringTable.emplace_back(newString);
+			auto it = dedup.find(str);
+			int dupidx = (it != dedup.end()) ? it->second : -1;
+			if (dupidx == -1) dedup.emplace(str, (int)stringTable.size());
+			stringTable.emplace_back(stringentry_t{ (char*)base, nullptr, ptr, std::move(str), dupidx });
 		}
 
 		template<typename T>
 		void Add(T* base, int* ptr, const char* str) {
-			if (!str) str = "";
-			stringentry_t newString{};
-
-			int i = 0;
-			for (auto& it : stringTable) {
-				if (!strcmp(str, it.string.c_str())) {
-					newString.base = (char*)base;
-					newString.ptr = ptr;
-					newString.string = str;
-					newString.dupindex = i;
-					stringTable.emplace_back(newString);
-					return;
-				}
-				i++;
-			}
-
-			newString.base = (char*)base;
-			newString.ptr = ptr;
-			newString.string = str;
-			newString.dupindex = -1;
-
-			stringTable.emplace_back(newString);
+			Add(base, ptr, std::string(str ? str : ""));
 		}
 
 		char* Write(char* pData) {

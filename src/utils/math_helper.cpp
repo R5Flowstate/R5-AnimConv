@@ -103,20 +103,20 @@ bool allEqualVector(const std::vector<Vector3>& v, size_t start, size_t end, int
 
 bool allEqualVector(const std::vector<Vector3>& v, size_t start, size_t end, int axis, float scale) {
 	if (end <= start) return true;
-	const int16_t& ref = (int16_t)(v[start][axis] / scale);
+	const int16_t ref = (int16_t)std::round(v[start][axis] / scale);
 
 	for (size_t i = start + 1; i < end; ++i) {
-		if ((int16_t)(v[i][axis] / scale) != ref) return false;
+		if ((int16_t)std::round(v[i][axis] / scale) != ref) return false;
 	}
 	return true;
 }
 
 bool allEqualVector(const std::vector<Vector4>& v, size_t start, size_t end, int axis, float scale) {
 	if (end <= start) return true;
-	const int16_t& ref = (int16_t)(v[start][axis] / scale);
+	const int16_t ref = (int16_t)std::round(v[start][axis] / scale);
 
 	for (size_t i = start + 1; i < end; ++i) {
-		if ((int16_t)(v[i][axis] / scale) != ref) return false;
+		if ((int16_t)std::round(v[i][axis] / scale) != ref) return false;
 	}
 	return true;
 }

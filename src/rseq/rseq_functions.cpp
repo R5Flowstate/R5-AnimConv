@@ -612,20 +612,18 @@ std::vector<int32_t> GetAnimIndexes(const uint16_t* pBlends, temp::Sequence& seq
 void ParsePoseKey(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
     if (!pSeqDesc->posekeyindex) return;
 
-    auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + pSeqDesc->posekeyindex);
+    const auto* pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->posekeyindex);
     const int count = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
-    for (int i = 0; i < count; i++)
-        seq.posekeys.push_back(pPosekeys[i]);
+    seq.posekeys.insert(seq.posekeys.end(), pPosekeys, pPosekeys + count);
 }
 
 template<typename TSeqDesc>
 void ParsePoseKey(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     if (!pSeqDesc->posekeyindex) return;
 
-    auto* pPosekeys = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
+    const auto* pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
     const int count = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
-    for (int i = 0; i < count; i++)
-        seq.posekeys.push_back(pPosekeys[i]);
+    seq.posekeys.insert(seq.posekeys.end(), pPosekeys, pPosekeys + count);
 }
 template void ParsePoseKey<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
@@ -719,18 +717,16 @@ template void ParseAutoLayer<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v
 template void ParseAutoLayer<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
 void ParseWeightList(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + pSeqDesc->weightlistindex);
-    for (int i = 0; i < (int)seq.weightlist.size(); i++)
-        seq.weightlist[i] = pWeightList[i];
+    const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->weightlistindex);
+    std::memcpy(seq.weightlist.data(), pWeightList, seq.weightlist.size() * sizeof(float));
 }
 
 template<typename TSeqDesc>
 void ParseWeightList(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     const auto idx = pSeqDesc->weightlistindex;
     if (idx && idx != 1 && idx != 3 && idx != 5) {
-        auto* pWeightList = reinterpret_cast<float*>((char*)pSeqDesc + OFFSET(idx));
-        for (int i = 0; i < (int)seq.weightlist.size(); i++)
-            seq.weightlist[i] = pWeightList[i];
+        const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(idx));
+        std::memcpy(seq.weightlist.data(), pWeightList, seq.weightlist.size() * sizeof(float));
     }
     else {
         std::fill(seq.weightlist.begin(), seq.weightlist.end(), 1.0f);

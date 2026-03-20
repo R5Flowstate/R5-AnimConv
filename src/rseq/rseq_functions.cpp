@@ -955,7 +955,7 @@ template void RLE::ParseFrameMovements<r5::anim::v121::mstudioanimdesc_t>(const 
 
 static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& coeffs_out, float& max_err_out) {
     const int nc = deg + 1;
-    std::vector<double> ATA(nc * nc, 0.0), ATb(nc, 0.0);
+    double ATA[36] = {}, ATb[6] = {};
     for (int f = 0; f < N; f++) {
         const double t = (N > 1) ? (double)f / (N - 1) : 0.0;
         double row[6]; row[0] = 1.0;
@@ -966,7 +966,7 @@ static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& c
         }
     }
 
-    std::vector<double> aug(nc * (nc + 1));
+    double aug[42] = {};
     for (int r = 0; r < nc; r++) {
         for (int c = 0; c < nc; c++) aug[r * (nc + 1) + c] = ATA[r * nc + c];
         aug[r * (nc + 1) + nc] = ATb[r];
@@ -984,7 +984,7 @@ static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& c
             for (int c = col; c <= nc; c++) aug[r * (nc + 1) + c] -= f * aug[col * (nc + 1) + c];
         }
     }
-    std::vector<double> x(nc, 0.0);
+    double x[6] = {};
     for (int r = nc - 1; r >= 0; r--) {
         double v = aug[r * (nc + 1) + nc];
         for (int c = r + 1; c < nc; c++) v -= aug[r * (nc + 1) + c] * x[c];
@@ -1113,34 +1113,24 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
     for (int i = 0; i < total_frames; i++)
         qv[i] = (int16_t)std::round(rawdata[startframe + i][axis] / scale);
 
-    auto is_constant = [&](int a, int b) {
-        for (int i = a + 1; i < b; i++) if (qv[i] != qv[a]) return false;
-        return true;
-        };
-
-    auto try_poly = [&](int a, int b, std::vector<int16_t>& coeffs_out) -> uint8_t {
-        const int N = b - a;
-        if (N <= 2) return 0;
-        std::vector<int16_t> slice(qv.begin() + a, qv.begin() + b);
-        int best_sz = BlockByteCost(0, N);
-        uint8_t best_t = 0;
-        for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
-            std::vector<int16_t> c;
-            float err;
-            FitPoly(slice.data(), N, deg, c, err);
-            if (err < 0.5f) {
-                const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
-                if (poly_sz < best_sz) {
-                    best_sz = poly_sz; best_t = (uint8_t)(2 + deg); coeffs_out = c;
-                }
-                break;
+    auto emit_block = [&](uint8_t type, int start, int end, const std::vector<int16_t>* pc) {
+        const int n = end - start;
+        if (n <= 255) {
+            temp::animblock_t ab{ type, (uint32_t)(startframe + start), (uint32_t)(startframe + end) };
+            WriteCompressedAnim(pData, rawdata, ab, axis, scale, pc);
+        } else {
+            for (int off = 0; off < n; ) {
+                const int chunk = std::min(255, n - off);
+                temp::animblock_t ab{ type, (uint32_t)(startframe + start + off), (uint32_t)(startframe + start + off + chunk) };
+                WriteCompressedAnim(pData, rawdata, ab, axis, scale, nullptr);
+                off += chunk;
             }
         }
-        return best_t;
         };
 
-    std::vector<temp::animblock_t> raw_blocks;
-    raw_blocks.reserve(64);
+    std::vector<temp::animblock_t> blocks;
+    std::vector<std::pair<int, std::vector<int16_t>>> poly_coeffs;
+    blocks.reserve(64);
 
     int pos = 0;
     while (pos < total_frames) {
@@ -1148,47 +1138,93 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             int cend = pos + 1;
             while (cend < total_frames && qv[cend] == qv[pos]) cend++;
             if (cend - pos >= 3) {
-                raw_blocks.push_back({ 2, pos, cend });
+                blocks.push_back({ 2, pos, cend });
                 pos = cend;
                 continue;
             }
         }
 
-        if (pos + 2 < total_frames) {
-            int base = pos;
-            int tend = pos + 1;
-            while (tend < total_frames) {
-                int d = (int)qv[tend] - (int)qv[base];
-                if (d < -128 || d > 127) {
-                    if (tend - base >= 3) {
-                        raw_blocks.push_back({ 1, base, tend });
-                        base = tend;
-                        tend = base + 1;
-                        continue;
-                    }
-                    break;
+        int t1end = pos + 1;
+        while (t1end < total_frames) {
+            int d = (int)qv[t1end] - (int)qv[pos];
+            if (d < -128 || d > 127) break;
+            t1end++;
+        }
+
+        if (t1end >= total_frames && t1end - pos >= 3) {
+            blocks.push_back({ 1, pos, t1end });
+            pos = t1end;
+            continue;
+        }
+
+        if (t1end - pos >= 3 && t1end < total_frames) {
+            int scan = t1end;
+            while (scan < total_frames) {
+                if (scan + 2 < total_frames && qv[scan] == qv[scan + 1] && qv[scan] == qv[scan + 2]) break;
+                if (scan + 2 < total_frames) {
+                    int d1 = (int)qv[scan + 1] - (int)qv[scan];
+                    int d2 = (int)qv[scan + 2] - (int)qv[scan];
+                    if (d1 >= -128 && d1 <= 127 && d2 >= -128 && d2 <= 127) break;
                 }
-                tend++;
+                scan++;
             }
 
-            if (tend - base >= 3) {
-                if (base > pos) {
-                    raw_blocks.push_back({ 1, base, tend });
-                } else {
-                    raw_blocks.push_back({ 1, pos, tend });
+            bool found_poly = false;
+            if (scan - pos > 2) {
+                const int pN = scan - pos;
+                const int t1_cost = BlockByteCost(1, t1end - pos);
+                const int rest_cost = BlockByteCost(0, scan - t1end);
+                const int separate_cost = t1_cost + rest_cost;
+
+                for (int deg = 1; deg <= std::min(5, pN - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(qv.data() + pos, pN, deg, c, err);
+                    if (err < 1.0f) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), pN);
+                        if (poly_sz < separate_cost) {
+                            const int idx = (int)blocks.size();
+                            blocks.push_back({ (uint8_t)(2 + deg), pos, scan });
+                            poly_coeffs.push_back({ idx, std::move(c) });
+                            pos = scan;
+                            found_poly = true;
+                        }
+                        break;
+                    }
                 }
-                pos = tend;
-                continue;
             }
-            if (base > pos) {
-                pos = base;
-                continue;
+            if (found_poly) continue;
+
+            {
+                const int t1N = t1end - pos;
+                const int t1_cost = BlockByteCost(1, t1N);
+                for (int deg = 1; deg <= std::min(5, t1N - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(qv.data() + pos, t1N, deg, c, err);
+                    if (err < 1.0f) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), t1N);
+                        if (poly_sz < t1_cost) {
+                            const int idx = (int)blocks.size();
+                            blocks.push_back({ (uint8_t)(2 + deg), pos, t1end });
+                            poly_coeffs.push_back({ idx, std::move(c) });
+                            pos = t1end;
+                            found_poly = true;
+                        }
+                        break;
+                    }
+                }
             }
+            if (found_poly) continue;
+
+            blocks.push_back({ 1, pos, t1end });
+            pos = t1end;
+            continue;
         }
 
         int rend = pos + 1;
         while (rend < total_frames) {
-            if (rend + 2 < total_frames && is_constant(rend, rend + 3)) break;
+            if (rend + 2 < total_frames && qv[rend] == qv[rend + 1] && qv[rend] == qv[rend + 2]) break;
             if (rend + 2 < total_frames) {
                 int d1 = (int)qv[rend + 1] - (int)qv[rend];
                 int d2 = (int)qv[rend + 2] - (int)qv[rend];
@@ -1196,92 +1232,179 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             }
             rend++;
         }
-        raw_blocks.push_back({ 0, pos, rend });
+
+        const int rN = rend - pos;
+        if (rN > 2) {
+            bool found_poly = false;
+            const int raw_cost = BlockByteCost(0, rN);
+            for (int deg = 1; deg <= std::min(5, rN - 1); deg++) {
+                std::vector<int16_t> c;
+                float err;
+                FitPoly(qv.data() + pos, rN, deg, c, err);
+                if (err < 0.5f) {
+                    const int poly_sz = BlockByteCost((uint8_t)(2 + deg), rN);
+                    if (poly_sz < raw_cost) {
+                        const int idx = (int)blocks.size();
+                        blocks.push_back({ (uint8_t)(2 + deg), pos, rend });
+                        poly_coeffs.push_back({ idx, std::move(c) });
+                        pos = rend;
+                        found_poly = true;
+                    }
+                    break;
+                }
+            }
+            if (found_poly) continue;
+        }
+
+        blocks.push_back({ 0, pos, rend });
         pos = rend;
     }
 
-    std::vector<temp::animblock_t> final_blocks;
-    final_blocks.reserve(raw_blocks.size() * 2);
+    std::vector<temp::animblock_t> processed;
+    processed.reserve(blocks.size() + 16);
 
-    for (auto& rb : raw_blocks) {
-        if (rb.type != 1) { final_blocks.push_back(rb); continue; }
+    for (int bi2 = 0; bi2 < (int)blocks.size(); bi2++) {
+        auto& rb = blocks[bi2];
 
-        const int a = rb.start, b = rb.end;
-        const int N = b - a;
-        const int nDiffs = N - 1;
-
-        int best_pi = -1, best_plen = 0, best_save = 0;
-        int i = 0;
-        while (i < nDiffs) {
-            const int16_t d = (int16_t)((int)qv[a + i + 1] - (int)qv[a]);
-            int plen = 1;
-            while (i + plen < nDiffs && (int16_t)((int)qv[a + i + plen + 1] - (int)qv[a]) == d)
-                plen++;
-
-            const int orig_cost = BlockByteCost(1, N);
-            int split_cost = BlockByteCost(2, plen);
-            if (i > 0)            split_cost += BlockByteCost(1, i + 1);
-            if (i + plen < nDiffs) split_cost += BlockByteCost(1, nDiffs - i - plen + 1);
-            const int net = orig_cost - split_cost;
-
-            if (net > best_save) { best_save = net; best_pi = i; best_plen = plen; }
-            i += plen;
+        if (rb.type >= 3) {
+            processed.push_back(rb);
+            continue;
         }
 
-        if (best_pi < 0) { final_blocks.push_back(rb); continue; }
+        if (rb.type == 1) {
+            const int a = rb.start, b = rb.end;
+            const int N = b - a;
+            const int nDiffs = N - 1;
 
-        const int16_t pval = (int16_t)((int)qv[a] + (int)((int16_t)((int)qv[a + best_pi + 1] - (int)qv[a])));
-        int pframe_start = a + best_pi + 1;
-        int pframe_end = a + best_pi + best_plen + 1;
+            if (N >= 8) {
+                int best_pi = -1, best_plen = 0, best_save = 0;
+                const int orig_cost = BlockByteCost(1, N);
+                int i = 0;
+                while (i < nDiffs) {
+                    const int16_t d = (int16_t)((int)qv[a + i + 1] - (int)qv[a]);
+                    int plen = 1;
+                    while (i + plen < nDiffs && (int16_t)((int)qv[a + i + plen + 1] - (int)qv[a]) == d)
+                        plen++;
 
-        if (best_pi == 0 && qv[a] == pval) pframe_start = a;
+                    int split_cost = BlockByteCost(2, plen);
+                    if (i > 0)            split_cost += BlockByteCost(1, i + 1);
+                    if (i + plen < nDiffs) split_cost += BlockByteCost(1, nDiffs - i - plen + 1);
+                    const int net = orig_cost - split_cost;
 
-        if (pframe_start > a)  final_blocks.push_back({ 1, a, pframe_start });
-        final_blocks.push_back({ 2, pframe_start, pframe_end });
-        if (pframe_end < b)    final_blocks.push_back({ 1, pframe_end, b });
-    }
+                    if (net > best_save) { best_save = net; best_pi = i; best_plen = plen; }
+                    i += plen;
+                }
 
-    std::vector<temp::animblock_t> merged;
-    merged.reserve(final_blocks.size());
-    for (auto& rb : final_blocks) {
-        if (!merged.empty() && merged.back().type == 0 && rb.type == 0 && merged.back().end == rb.start)
-            merged.back().end = rb.end;
+                if (best_pi >= 0) {
+                    const int16_t pval = (int16_t)((int)qv[a] + (int)((int16_t)((int)qv[a + best_pi + 1] - (int)qv[a])));
+                    int ps = a + best_pi + 1;
+                    int pe = a + best_pi + best_plen + 1;
+                    if (best_pi == 0 && qv[a] == pval) ps = a;
+
+                    if (ps > a) processed.push_back({ 1, a, ps });
+                    processed.push_back({ 2, ps, pe });
+                    if (pe < b) processed.push_back({ 1, pe, b });
+                    continue;
+                }
+            }
+        }
+
+        if (rb.type == 0 && !processed.empty() && processed.back().type == 0 && processed.back().end == rb.start)
+            processed.back().end = rb.end;
         else
-            merged.push_back(rb);
+            processed.push_back(rb);
     }
 
-    std::vector<std::pair<temp::animblock_t, std::vector<int16_t>>> emit_list;
-    emit_list.reserve(merged.size());
+    std::unordered_map<int, std::vector<int16_t>*> poly_map;
+    for (auto& [idx, c] : poly_coeffs) poly_map[idx] = &c;
 
-    for (auto& rb : merged) {
-        if (rb.type == 0) {
-            std::vector<int16_t> coeffs;
-            uint8_t pt = try_poly(rb.start, rb.end, coeffs);
-            if (pt != 0) {
-                emit_list.push_back({ { pt, rb.start, rb.end }, coeffs });
+    std::vector<int16_t> coeffs;
+    const int nblocks = (int)processed.size();
+    int bi = 0;
+    while (bi < nblocks) {
+        auto& blk = processed[bi];
+
+        if (blk.type >= 3) {
+            std::vector<int16_t>* pc = nullptr;
+            for (auto& [idx, c] : poly_coeffs) {
+                if (blocks[idx].start == blk.start && blocks[idx].end == blk.end && blocks[idx].type == blk.type) {
+                    pc = &c;
+                    break;
+                }
+            }
+            emit_block(blk.type, blk.start, blk.end, pc);
+            bi++;
+            continue;
+        }
+
+        if (blk.type == 2) {
+            emit_block(2, blk.start, blk.end, nullptr);
+            bi++;
+            continue;
+        }
+
+        int merge_end = bi + 1;
+        while (merge_end < nblocks && processed[merge_end].type < 3 && processed[merge_end].type != 2 &&
+               processed[merge_end].start == processed[merge_end - 1].end)
+            merge_end++;
+
+        const int ms = processed[bi].start;
+        const int me = processed[merge_end - 1].end;
+        const int mN = me - ms;
+
+        if (mN > 2 && merge_end - bi > 1) {
+            int merge_cost = 0;
+            for (int j = bi; j < merge_end; j++)
+                merge_cost += BlockByteCost(processed[j].type, processed[j].end - processed[j].start);
+
+            uint8_t best_t = 0;
+            coeffs.clear();
+            for (int deg = 1; deg <= std::min(5, mN - 1); deg++) {
+                std::vector<int16_t> c;
+                float err;
+                FitPoly(qv.data() + ms, mN, deg, c, err);
+                if (err < 0.5f) {
+                    const int poly_sz = BlockByteCost((uint8_t)(2 + deg), mN);
+                    if (poly_sz < merge_cost) {
+                        best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                    }
+                    break;
+                }
+            }
+            if (best_t != 0) {
+                emit_block(best_t, ms, me, &coeffs);
+                bi = merge_end;
                 continue;
             }
         }
-        emit_list.push_back({ rb, {} });
-    }
 
-    for (auto& [rb, coeffs] : emit_list) {
-        const int blk_start = rb.start;
-        const int blk_end   = rb.end;
-        const int blk_n     = blk_end - blk_start;
-
-        if (blk_n <= 255) {
-            temp::animblock_t ab{ rb.type, (uint32_t)(startframe + blk_start), (uint32_t)(startframe + blk_end) };
-            const std::vector<int16_t>* pc = coeffs.empty() ? nullptr : &coeffs;
-            WriteCompressedAnim(pData, rawdata, ab, axis, scale, pc);
-        } else {
-            for (int off = 0; off < blk_n; ) {
-                const int chunk = std::min(255, blk_n - off);
-                temp::animblock_t ab{ rb.type, (uint32_t)(startframe + blk_start + off), (uint32_t)(startframe + blk_start + off + chunk) };
-                WriteCompressedAnim(pData, rawdata, ab, axis, scale, nullptr);
-                off += chunk;
+        for (int j = bi; j < merge_end; j++) {
+            auto& rb = processed[j];
+            const int N = rb.end - rb.start;
+            if (N > 2 && rb.type < 3) {
+                int cur_cost = BlockByteCost(rb.type, N);
+                uint8_t best_t = 0;
+                coeffs.clear();
+                for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(qv.data() + rb.start, N, deg, c, err);
+                    if (err < 1.0f) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
+                        if (poly_sz < cur_cost) {
+                            best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                        }
+                        break;
+                    }
+                }
+                if (best_t != 0) {
+                    emit_block(best_t, rb.start, rb.end, &coeffs);
+                    continue;
+                }
             }
+            emit_block(rb.type, rb.start, rb.end, nullptr);
         }
+        bi = merge_end;
     }
 }
 template void WriteAnimData<Vector3>(char*&, const std::vector<Vector3>&, const uint32_t, const uint32_t, int, float);

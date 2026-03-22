@@ -41,8 +41,7 @@ int GetSectionLength(const TAnimDesc& animdesc, const int section, const int num
     else if constexpr (
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t>  ||
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t>  ||
-        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t>  ||
-        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t>) {
         if (!animdesc.sectionframes) return animdesc.numframes;
 
         const int  sectionstallframes = animdesc.sectionstallframes;
@@ -51,16 +50,30 @@ int GetSectionLength(const TAnimDesc& animdesc, const int section, const int num
         if (sectionstallframes && section == 0) return sectionstallframes;
         if (!isDP && section == (numSections - 1)) return 1;
 
-        const int sectionbase     = section - (bool)sectionstallframes;
+        const int sectionbase     = section - ((bool)sectionstallframes | isDP);
         const int frameoffset     = sectionstallframes + sectionbase * animdesc.sectionframes;
         const int remainingframes = animdesc.numframes - frameoffset - (isDP ? 0 : 1);
 
         return (remainingframes <= animdesc.sectionframes) ? remainingframes : animdesc.sectionframes;
     }
+    else if constexpr ( std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        if (!animdesc.sectionframes) return animdesc.numframes;
+
+        const int  sectionstallframes = animdesc.sectionstallframes;
+        const bool isDP = (animdesc.flags & r5::ANIM_DATAPOINT) != 0;
+
+        if (sectionstallframes && section == 0) return sectionstallframes;
+
+        const int sectionbase = section - ((bool)sectionstallframes | isDP);
+        const int frameoffset = sectionstallframes + sectionbase * animdesc.sectionframes;
+        const int remainingframes = animdesc.numframes - frameoffset ;
+
+        return (remainingframes <= animdesc.sectionframes) ? remainingframes : animdesc.sectionframes;
+    }
     return 0;
 }
-template int GetSectionLength<p2::mstudioanimdesc_t>             (const p2::mstudioanimdesc_t&,              const int, const int);
-template int GetSectionLength<r2::mstudioanimdesc_t>             (const r2::mstudioanimdesc_t&,              const int, const int);
+template int GetSectionLength<p2::mstudioanimdesc_t>            (const p2::mstudioanimdesc_t&,             const int, const int);
+template int GetSectionLength<r2::mstudioanimdesc_t>            (const r2::mstudioanimdesc_t&,             const int, const int);
 template int GetSectionLength<r5::anim::v7::mstudioanimdesc_t>  (const r5::anim::v7::mstudioanimdesc_t&,   const int, const int);
 template int GetSectionLength<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&,  const int, const int);
@@ -78,24 +91,19 @@ int GetSectionCount(const TAnimDesc& animdesc) {
     else if constexpr (
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
-        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t>) {
+        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
         const int useTrail = (animdesc.flags & ANIM_DATAPOINT) ? 0 : 1;
         const int useStall = animdesc.sectionstallframes ? 1 : 0;
         const int base     = (animdesc.numframes - animdesc.sectionstallframes - 1) / animdesc.sectionframes;
-        return base + useTrail + useStall + 1;
-    }
-    else if constexpr (
-        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
-        const int useTrail = (animdesc.flags & ANIM_DATAPOINT) ? 0 : 1;
-        const int useStall = animdesc.sectionstallframes
-                           ? (animdesc.sectionstallframes != animdesc.sectionframes) : 0;
-        const int base     = (animdesc.numframes - animdesc.sectionstallframes - 1) / animdesc.sectionframes;
+
+        if constexpr(std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) return base + useTrail + useStall;
         return base + useTrail + useStall + 1;
     }
     return 0;
 }
-template int GetSectionCount<p2::mstudioanimdesc_t>             (const p2::mstudioanimdesc_t&);
-template int GetSectionCount<r2::mstudioanimdesc_t>             (const r2::mstudioanimdesc_t&);
+template int GetSectionCount<p2::mstudioanimdesc_t>            (const p2::mstudioanimdesc_t&);
+template int GetSectionCount<r2::mstudioanimdesc_t>            (const r2::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v7::mstudioanimdesc_t>  (const r5::anim::v7::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&);
@@ -308,8 +316,8 @@ void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** pani
     const uint8_t  total = ptrack[1];
     const uint8_t* pFrameIndices = ptrack + 2;
 
-    const r5::anim::AnimQuat32* pPackedData = reinterpret_cast<const r5::anim::AnimQuat32*>  (total >= sectionlength ? pFrameIndices : pFrameIndices + total);
-    const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*> (pPackedData + valid);
+    const r5::anim::AnimQuat32* pPackedData = reinterpret_cast<const r5::anim::AnimQuat32*> (total >= sectionlength ? pFrameIndices : pFrameIndices + total);
+    const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid);
 
     const int idx = r5::DP::ResolveFrameIndex(localFrame, total, sectionlength, pFrameIndices);
     r5::DP::UnpackAnimQuat32(q, pPackedData[idx], &pAxisFixup[idx]);
@@ -517,7 +525,7 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
         sectionbaseframe += static_cast<uint32_t>(sectionframes);
     }
 }
-template void r5::DP::ParseDataPoint<r5::anim::v12::mstudioanimdesc_t>(const r5::anim::v12::mstudioanimdesc_t*, temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
+template void r5::DP::ParseDataPoint<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
 template void r5::DP::ParseDataPoint<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
 
 template<typename TAnimDesc>
@@ -546,7 +554,7 @@ void r5::DP::ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t&
         const uint16_t* pFrameIdx = ptrack16 + 2;
 
         if (total16) {
-            const r5::anim::AnimPos64* pPackedData = reinterpret_cast<const r5::anim::AnimPos64*>  (total16 >= numframes ? pFrameIdx : pFrameIdx + total16);
+            const r5::anim::AnimPos64* pPackedData  = reinterpret_cast<const r5::anim::AnimPos64*>  (total16 >= numframes ? pFrameIdx : pFrameIdx + total16);
             const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid16);
 
             for (int frame = 0; frame < numframes; frame++) {
@@ -578,7 +586,7 @@ void r5::DP::ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t&
 
     anim.movement = movement;
 }
-template void r5::DP::ParseFrameMovementsDP<r5::anim::v12::mstudioanimdesc_t>(const r5::anim::v12::mstudioanimdesc_t*, temp::animdesc_t&);
+template void r5::DP::ParseFrameMovementsDP<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*, temp::animdesc_t&);
 template void r5::DP::ParseFrameMovementsDP<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
 
 std::vector<int32_t> GetAnimIndexes(const int32_t* pBlends, temp::Sequence& seq, int32_t numanims) {

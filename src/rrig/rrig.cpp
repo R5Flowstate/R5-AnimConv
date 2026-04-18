@@ -161,7 +161,7 @@ static void ParseRRIG_v16_hitboxes(char* buffer, temp::rig_t& rig, int numhitbox
 	for (int i = 0; i < numhitboxsets; i++) {
 		rig.hitboxsets[i].name = STRING_FROM_IDX(&pHitboxsets[i], pHitboxsets[i].sznameindex);
 		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
-			r5::v8::mstudiobbox_t* pHitbox = PTR_FROM_IDX(r5::v8::mstudiobbox_t, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
+			auto* pHitbox = PTR_FROM_IDX(r5::v16::mstudiobbox_t, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
 			temp::bbox_t hitbox{};
 			hitbox.name = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].szhitboxnameindex);
 			hitbox.hitdataGroupOffset = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].hitdataGroupOffset);
@@ -169,7 +169,7 @@ static void ParseRRIG_v16_hitboxes(char* buffer, temp::rig_t& rig, int numhitbox
 			hitbox.group = pHitbox[j].group;
 			hitbox.bbmin = pHitbox[j].bbmin;
 			hitbox.bbmax = pHitbox[j].bbmax;
-			hitbox.critShotOverride = pHitbox[j].critShotOverride;
+			hitbox.critShotOverride = 0;
 			rig.hitboxsets[i].hitboxes.push_back(hitbox);
 		}
 	}

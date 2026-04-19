@@ -3,7 +3,7 @@
 
 static void ParseRRIG_v121_bones(char* buffer, temp::rig_t& rig, int boneindex, int bonetablebynameindex) {
 	rig.bones.resize(rig.hdr.numbones);
-	r5::v121::mstudiobone_t* pBones = reinterpret_cast<r5::v121::mstudiobone_t*>(buffer + boneindex);
+	auto* pBones = reinterpret_cast<r5::v121::mstudiobone_t*>(buffer + boneindex);
 	for (int i = 0; i < rig.hdr.numbones; i++) {
 		rig.bones[i].name = STRING_FROM_IDX(&pBones[i], pBones[i].sznameindex);
 		rig.bones[i].parent = pBones[i].parent;
@@ -113,7 +113,7 @@ static void ParseRRIG_v8_nodes(char* buffer, temp::rig_t& rig, int numlocalnodes
 		int transitionCount = *reinterpret_cast<int*>(buffer + pNodeDataIndexes[i]);
 
 		for (int j = 0; j < transitionCount; j++) {
-			r5::v8::nodedata_t* pNodeDataV8 = reinterpret_cast<r5::v8::nodedata_t*>(buffer + pNodeDataIndexes[i] + sizeof(int));
+			auto* pNodeDataV8 = reinterpret_cast<r5::v8::nodedata_t*>(buffer + pNodeDataIndexes[i] + sizeof(int));
 			temp::nodedata_t nodedata{};
 			nodedata.tonode = pNodeDataV8[j].tonode;
 			nodedata.seq = pNodeDataV8[j].seq;
@@ -137,7 +137,7 @@ static void ParseRRIG_v14_nodes(char* buffer, temp::rig_t& rig, int numlocalnode
 		int transitionCount = *reinterpret_cast<int*>(buffer + pNodeDataIndexes[i]);
 
 		for (int j = 0; j < transitionCount; j++) {
-			r5::v8::nodedata_t* pNodeDataV14 = reinterpret_cast<r5::v8::nodedata_t*>(buffer + pNodeDataIndexes[i] + sizeof(int));
+			auto* pNodeDataV14 = reinterpret_cast<r5::v8::nodedata_t*>(buffer + pNodeDataIndexes[i] + sizeof(int));
 			temp::nodedata_t nodedata{};
 			nodedata.tonode = pNodeDataV14[j].tonode;
 			nodedata.seq = pNodeDataV14[j].seq;
@@ -172,13 +172,13 @@ static void ParseRRIG_v16_nodes(char* buffer, temp::rig_t& rig, int numlocalnode
 
 static void ParseRRIG_v8_hitboxes(char* buffer, temp::rig_t& rig, int numhitboxsets, int hitboxsetindex) {
 	//hboxset
-	r5::v8::mstudiohitboxset_t* pHitboxsets = PTR_FROM_IDX(r5::v8::mstudiohitboxset_t, buffer, hitboxsetindex);
+	auto* pHitboxsets = PTR_FROM_IDX(r5::v8::mstudiohitboxset_t, buffer, hitboxsetindex);
 	rig.hitboxsets.resize(numhitboxsets);
 	for (int i = 0; i < numhitboxsets; i++) {
 		rig.hitboxsets[i].name = STRING_FROM_IDX(&pHitboxsets[i], pHitboxsets[i].sznameindex);
 		verbose("");
 		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
-			r5::v8::mstudiobbox_t* pHitbox = PTR_FROM_IDX(r5::v8::mstudiobbox_t, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
+			auto* pHitbox = PTR_FROM_IDX(r5::v8::mstudiobbox_t, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
 			temp::bbox_t hitbox{};
 			hitbox.name = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].szhitboxnameindex);
 			hitbox.hitdataGroupOffset = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].hitdataGroupOffset);
@@ -215,7 +215,7 @@ static void ParseRRIG_v16_hitboxes(char* buffer, temp::rig_t& rig, int numhitbox
 
 static void ParseRRIG_v8_poseparams(char* buffer, temp::rig_t& rig, int numlocalposeparameters, int localposeparamindex) {
 	//pose param
-	r5::v8::mstudioposeparamdesc_t* pPoseparams = PTR_FROM_IDX(r5::v8::mstudioposeparamdesc_t, buffer, localposeparamindex);
+	auto* pPoseparams = PTR_FROM_IDX(r5::v8::mstudioposeparamdesc_t, buffer, localposeparamindex);
 	for (int i = 0; i < numlocalposeparameters; i++) {
 		temp::poseparam_t poseparam{};
 		poseparam.name = STRING_FROM_IDX(&pPoseparams[i], pPoseparams[i].sznameindex);
@@ -243,14 +243,14 @@ static void ParseRRIG_v16_poseparams(char* buffer, temp::rig_t& rig, int numloca
 
 static void ParseRRIG_v8_ikchains(char* buffer, temp::rig_t& rig, int numikchains, int ikchainindex) {
 	//ik chains
-	r5::v8::mstudioikchain_t* pIkchains = PTR_FROM_IDX(r5::v8::mstudioikchain_t, buffer, ikchainindex);
+	auto* pIkchains = PTR_FROM_IDX(r5::v8::mstudioikchain_t, buffer, ikchainindex);
 	for (int i = 0; i < numikchains; i++) {
 		temp::ikchain_t ikchain{};
 		ikchain.name = STRING_FROM_IDX(&pIkchains[i], pIkchains[i].sznameindex);
 		ikchain.linktype = pIkchains[i].linktype;
 		ikchain.unk = pIkchains[i].unk;
 
-		r5::v8::mstudioiklink_t* pIklinks = PTR_FROM_IDX(r5::v8::mstudioiklink_t, &pIkchains[i], pIkchains[i].linkindex);
+		auto* pIklinks = PTR_FROM_IDX(r5::v8::mstudioiklink_t, &pIkchains[i], pIkchains[i].linkindex);
 		for (int j = 0; j < pIkchains[i].numlinks; j++) {
 			temp::iklink_t iklink{};
 			iklink.bone = pIklinks[j].bone;
@@ -446,7 +446,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	stringTables.Init();
 
 	// Header
-	r5::v8::studiohdr_t* pRigHdr = reinterpret_cast<r5::v8::studiohdr_t*>(pData);
+	auto* pRigHdr = reinterpret_cast<r5::v8::studiohdr_t*>(pData);
 
 	pRigHdr->id = 'TSDI';
 	pRigHdr->version = 54;
@@ -472,7 +472,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 
 	// Bones
 	pRigHdr->boneindex = static_cast<int32_t>(pData - pBase);
-	r5::v8::mstudiobone_t* pBones = reinterpret_cast<r5::v8::mstudiobone_t*>(pData);
+	auto* pBones = reinterpret_cast<r5::v8::mstudiobone_t*>(pData);
 	for (int i = 0; i < pRigHdr->numbones; i++) {
 		auto& bone = rig.bones[i];
 		stringTables.Add((char*)&pBones[i], &pBones[i].sznameindex, bone.name);
@@ -506,7 +506,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	//hboxset
 	pRigHdr->numhitboxsets = static_cast<uint32_t>(rig.hitboxsets.size());
 	pRigHdr->hitboxsetindex = static_cast<uint32_t>(pData - pBase);
-	r5::v8::mstudiohitboxset_t* pHitboxsets = reinterpret_cast<r5::v8::mstudiohitboxset_t*>(pData);
+	auto* pHitboxsets = reinterpret_cast<r5::v8::mstudiohitboxset_t*>(pData);
 	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
 		stringTables.Add((char*)&pHitboxsets[i], &pHitboxsets[i].sznameindex, rig.hitboxsets[i].name);
 		pHitboxsets[i].numhitboxes = static_cast<uint32_t>(rig.hitboxsets[i].hitboxes.size());
@@ -514,7 +514,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	}
 
 	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
-		r5::v8::mstudiobbox_t* pHitboxes = reinterpret_cast<r5::v8::mstudiobbox_t*>(pData);
+		auto* pHitboxes = reinterpret_cast<r5::v8::mstudiobbox_t*>(pData);
 		pHitboxsets[i].hitboxindex = static_cast<uint32_t>(pData - (char*)&pHitboxsets[i]);
 		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
 			auto& hitbox = rig.hitboxsets[i].hitboxes[j];
@@ -563,7 +563,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 
 		for (int j = 0; j < transitionsCount; j++) {
 			auto& nodedata = rig.nodes[i].nodedatas[j];
-			r5::v8::nodedata_t* pNodeData = reinterpret_cast<r5::v8::nodedata_t*>(pData);
+			auto* pNodeData = reinterpret_cast<r5::v8::nodedata_t*>(pData);
 			pNodeData[j].tonode = nodedata.tonode;
 			pNodeData[j].seq = nodedata.seq;
 		}
@@ -573,7 +573,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	//pose param
 	pRigHdr->numlocalposeparameters = static_cast<uint32_t>(rig.poseparams.size());
 	pRigHdr->localposeparamindex = static_cast<uint32_t>(pData - pBase);
-	r5::v8::mstudioposeparamdesc_t* pPoseparams = reinterpret_cast<r5::v8::mstudioposeparamdesc_t*>(pData);
+	auto* pPoseparams = reinterpret_cast<r5::v8::mstudioposeparamdesc_t*>(pData);
 	for (int i = 0; i < pRigHdr->numlocalposeparameters; i++) {
 		stringTables.Add((char*)&pPoseparams[i], &pPoseparams[i].sznameindex, rig.poseparams[i].name);
 		pPoseparams[i].start = rig.poseparams[i].start;
@@ -586,7 +586,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	//ik chains
 	pRigHdr->numikchains = static_cast<uint32_t>(rig.ikchains.size());
 	pRigHdr->ikchainindex = static_cast<uint32_t>(pData - pBase);
-	r5::v8::mstudioikchain_t* pIkchains = reinterpret_cast<r5::v8::mstudioikchain_t*>(pData);
+	auto* pIkchains = reinterpret_cast<r5::v8::mstudioikchain_t*>(pData);
 	for (int i = 0; i < pRigHdr->numikchains; i++) {
 		stringTables.Add((char*)&pIkchains[i], &pIkchains[i].sznameindex, rig.ikchains[i].name);
 		pIkchains[i].linktype = rig.ikchains[i].linktype;
@@ -598,7 +598,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	//ik links
 	for (int i = 0; i < pRigHdr->numikchains; i++) {
 		pIkchains[i].linkindex = static_cast<uint32_t>(pData - (char*)&pIkchains[i]);
-		r5::v8::mstudioiklink_t* pIklinks = reinterpret_cast<r5::v8::mstudioiklink_t*>(pData);
+		auto* pIklinks = reinterpret_cast<r5::v8::mstudioiklink_t*>(pData);
 		for (int j = 0; j < rig.ikchains[i].iklinks.size(); j++) {
 			auto& iklink = rig.ikchains[i].iklinks[j];
 			pIklinks[j].bone = iklink.bone;

@@ -39,6 +39,7 @@ int GetSectionLength(const TAnimDesc& animdesc, const int section, const int num
         return (remainingframes <= animdesc.sectionframes) ? remainingframes : animdesc.sectionframes;
     }
     else if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v71::mstudioanimdesc_t>  ||
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t>  ||
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t>  ||
         std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t>) {
@@ -75,6 +76,7 @@ int GetSectionLength(const TAnimDesc& animdesc, const int section, const int num
 template int GetSectionLength<p2::mstudioanimdesc_t>            (const p2::mstudioanimdesc_t&,             const int, const int);
 template int GetSectionLength<r2::mstudioanimdesc_t>            (const r2::mstudioanimdesc_t&,             const int, const int);
 template int GetSectionLength<r5::anim::v7::mstudioanimdesc_t>  (const r5::anim::v7::mstudioanimdesc_t&,   const int, const int);
+template int GetSectionLength<r5::anim::v71::mstudioanimdesc_t> (const r5::anim::v71::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t&,  const int, const int);
@@ -89,6 +91,7 @@ int GetSectionCount(const TAnimDesc& animdesc) {
         return (animdesc.numframes - 1) / animdesc.sectionframes + 2;
     }
     else if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v71::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
@@ -105,6 +108,7 @@ int GetSectionCount(const TAnimDesc& animdesc) {
 template int GetSectionCount<p2::mstudioanimdesc_t>            (const p2::mstudioanimdesc_t&);
 template int GetSectionCount<r2::mstudioanimdesc_t>            (const r2::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v7::mstudioanimdesc_t>  (const r5::anim::v7::mstudioanimdesc_t&);
+template int GetSectionCount<r5::anim::v71::mstudioanimdesc_t> (const r5::anim::v71::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t&);
@@ -309,6 +313,94 @@ int r5::DP::ResolveFrameIndex(const int localFrame, const TIndexType total, cons
     return lo;
 }
 
+template<typename TIndexType, typename TDataType>
+static void ResolveInterpFrames_DP(int& prevFrame, int& nextFrame, float& s,
+    const int localFrame, const TIndexType total, const int sectionlength,
+    const TIndexType* pFrameIndices, const TDataType** pDataOut)
+{
+    if (total >= static_cast<TIndexType>(sectionlength)) {
+        prevFrame = localFrame < static_cast<int>(total) ? localFrame : static_cast<int>(total) - 1;
+        nextFrame = prevFrame;
+        s = 0.0f;
+        *pDataOut = reinterpret_cast<const TDataType*>(pFrameIndices);
+        return;
+    }
+
+    int lo = 0, hi = static_cast<int>(total) - 1;
+    while (lo < hi) {
+        const int mid = (lo + hi + 1) >> 1;
+        if (static_cast<int>(pFrameIndices[mid]) <= localFrame)
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    prevFrame = lo;
+
+    const int prevIdx = static_cast<int>(pFrameIndices[prevFrame]);
+
+    if (prevIdx >= localFrame || prevFrame >= static_cast<int>(total) - 1) {
+        nextFrame = prevFrame;
+        s = 0.0f;
+    }
+    else {
+        nextFrame = prevFrame + 1;
+        s = static_cast<float>(localFrame - prevIdx) / static_cast<float>(static_cast<int>(pFrameIndices[nextFrame]) - prevIdx);
+    }
+
+    *pDataOut = reinterpret_cast<const TDataType*>(pFrameIndices + total);
+}
+
+template<typename TPackedType>
+static void CalcBoneSeek_DP(const TPackedType* pPackedData, int& validIdx, uint32_t& remainingFrames, const uint32_t targetFrame)
+{
+    remainingFrames = targetFrame;
+    if (pPackedData[validIdx].numInterpFrames < targetFrame) {
+        uint32_t numInterpFrames = pPackedData[validIdx].numInterpFrames;
+        while (numInterpFrames < remainingFrames) {
+            validIdx++;
+            remainingFrames -= (numInterpFrames + 1);
+            numInterpFrames = pPackedData[validIdx].numInterpFrames;
+        }
+    }
+}
+
+static void QuatSlerp(const Quaternion& p, const Quaternion& q, float t, Quaternion& qt)
+{
+    Quaternion q2;
+    float a = (p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y) + (p.z-q.z)*(p.z-q.z) + (p.w-q.w)*(p.w-q.w);
+    float b = (p.x+q.x)*(p.x+q.x) + (p.y+q.y)*(p.y+q.y) + (p.z+q.z)*(p.z+q.z) + (p.w+q.w)*(p.w+q.w);
+    if (a > b) { q2.x = -q.x; q2.y = -q.y; q2.z = -q.z; q2.w = -q.w; }
+    else       { q2.x =  q.x; q2.y =  q.y; q2.z =  q.z; q2.w =  q.w; }
+
+    float cosom = p.x*q2.x + p.y*q2.y + p.z*q2.z + p.w*q2.w;
+
+    if ((1.0f + cosom) > 0.000001f) {
+        float sclp, sclq;
+        if ((1.0f - cosom) > 0.000001f) {
+            float omega = acosf(cosom);
+            float sinom = sinf(omega);
+            sclp = sinf((1.0f - t) * omega) / sinom;
+            sclq = sinf(t * omega) / sinom;
+        }
+        else {
+            sclp = 1.0f - t;
+            sclq = t;
+        }
+        qt.x = sclp * p.x + sclq * q2.x;
+        qt.y = sclp * p.y + sclq * q2.y;
+        qt.z = sclp * p.z + sclq * q2.z;
+        qt.w = sclp * p.w + sclq * q2.w;
+    }
+    else {
+        qt.x = -q2.y; qt.y = q2.x; qt.z = -q2.w; qt.w = q2.z;
+        float sclp = sinf((1.0f - t) * M_PI2);
+        float sclq = sinf(t * M_PI2);
+        qt.x = sclp * p.x + sclq * qt.x;
+        qt.y = sclp * p.y + sclq * qt.y;
+        qt.z = sclp * p.z + sclq * qt.z;
+    }
+}
+
 void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** panimtrack, const int localFrame, Quaternion& q) {
     const uint8_t* ptrack = *panimtrack;
 
@@ -316,11 +408,30 @@ void r5::DP::CalcBoneQuaternion_DP(const int sectionlength, const uint8_t** pani
     const uint8_t  total = ptrack[1];
     const uint8_t* pFrameIndices = ptrack + 2;
 
-    const r5::anim::AnimQuat32* pPackedData = reinterpret_cast<const r5::anim::AnimQuat32*> (total >= sectionlength ? pFrameIndices : pFrameIndices + total);
-    const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid);
+    int prevFrame, nextFrame;
+    float s;
+    const r5::anim::AnimQuat32* pPackedData;
 
-    const int idx = r5::DP::ResolveFrameIndex(localFrame, total, sectionlength, pFrameIndices);
-    r5::DP::UnpackAnimQuat32(q, pPackedData[idx], &pAxisFixup[idx]);
+    ResolveInterpFrames_DP(prevFrame, nextFrame, s, localFrame, total, sectionlength, pFrameIndices, &pPackedData);
+    const auto* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid);
+
+    int validIdx = 0;
+    uint32_t remainingFrames;
+    CalcBoneSeek_DP(pPackedData, validIdx, remainingFrames, static_cast<uint32_t>(prevFrame));
+
+    Quaternion q1;
+    r5::DP::UnpackAnimQuat32(q1, pPackedData[validIdx], &pAxisFixup[prevFrame]);
+
+    if (prevFrame == nextFrame) {
+        q = q1;
+    }
+    else {
+        CalcBoneSeek_DP(pPackedData, validIdx, remainingFrames, static_cast<uint32_t>(nextFrame - prevFrame) + remainingFrames);
+
+        Quaternion q2;
+        r5::DP::UnpackAnimQuat32(q2, pPackedData[validIdx], &pAxisFixup[nextFrame]);
+        QuatSlerp(q1, q2, s, q);
+    }
 
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
@@ -336,11 +447,33 @@ void r5::DP::CalcBonePosition_DP(const int sectionlength, const uint8_t** panimt
 
     if (!total) { pos = { 0.0f, 0.0f, 0.0f }; return; }
 
-    const r5::anim::AnimPos64* pPackedData = reinterpret_cast<const r5::anim::AnimPos64*>  (total >= sectionlength ? pFrameIndices : pFrameIndices + total);
-    const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid);
+    int prevFrame, nextFrame;
+    float s;
+    const r5::anim::AnimPos64* pPackedData;
 
-    const int idx = r5::DP::ResolveFrameIndex(localFrame, total, sectionlength, pFrameIndices);
-    r5::DP::UnpackAnimPos64(pos, pPackedData[idx], &pAxisFixup[idx]);
+    ResolveInterpFrames_DP(prevFrame, nextFrame, s, localFrame, total, sectionlength, pFrameIndices, &pPackedData);
+    const auto* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(pPackedData + valid);
+
+    int validIdx = 0;
+    uint32_t remainingFrames;
+    CalcBoneSeek_DP(pPackedData, validIdx, remainingFrames, static_cast<uint32_t>(prevFrame));
+
+    Vector3 pos1;
+    r5::DP::UnpackAnimPos64(pos1, pPackedData[validIdx], &pAxisFixup[prevFrame]);
+
+    if (prevFrame == nextFrame) {
+        pos = pos1;
+    }
+    else {
+        CalcBoneSeek_DP(pPackedData, validIdx, remainingFrames, static_cast<uint32_t>(nextFrame - prevFrame) + remainingFrames);
+
+        Vector3 pos2;
+        r5::DP::UnpackAnimPos64(pos2, pPackedData[validIdx], &pAxisFixup[nextFrame]);
+
+        pos.x = pos1.x + (pos2.x - pos1.x) * s;
+        pos.y = pos1.y + (pos2.y - pos1.y) * s;
+        pos.z = pos1.z + (pos2.z - pos1.z) * s;
+    }
 
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
@@ -352,12 +485,30 @@ void r5::DP::CalcBonePositionVirtual_DP(const int sectionlength, const uint8_t**
     const float    posscale = HalfToFloat(*reinterpret_cast<const uint16_t*>(ptrack + 1)) / 127.0f;
     const uint8_t* pFrameIndices = ptrack + 3;
 
-    const r5::anim::AxisFixup_t* pAxisFixup = reinterpret_cast<const r5::anim::AxisFixup_t*>(total >= sectionlength ? pFrameIndices : pFrameIndices + total);
+    int prevFrame, nextFrame;
+    float s;
+    const r5::anim::AxisFixup_t* pAxisFixup;
 
-    const int idx = r5::DP::ResolveFrameIndex(localFrame, total, sectionlength, pFrameIndices);
-    pos.x = static_cast<float>(pAxisFixup[idx].adjustment[0]) * posscale;
-    pos.y = static_cast<float>(pAxisFixup[idx].adjustment[1]) * posscale;
-    pos.z = static_cast<float>(pAxisFixup[idx].adjustment[2]) * posscale;
+    ResolveInterpFrames_DP(prevFrame, nextFrame, s, localFrame, total, sectionlength, pFrameIndices, &pAxisFixup);
+
+    Vector3 pos1;
+    pos1.x = static_cast<float>(pAxisFixup[prevFrame].adjustment[0]) * posscale;
+    pos1.y = static_cast<float>(pAxisFixup[prevFrame].adjustment[1]) * posscale;
+    pos1.z = static_cast<float>(pAxisFixup[prevFrame].adjustment[2]) * posscale;
+
+    if (prevFrame == nextFrame) {
+        pos = pos1;
+    }
+    else {
+        Vector3 pos2;
+        pos2.x = static_cast<float>(pAxisFixup[nextFrame].adjustment[0]) * posscale;
+        pos2.y = static_cast<float>(pAxisFixup[nextFrame].adjustment[1]) * posscale;
+        pos2.z = static_cast<float>(pAxisFixup[nextFrame].adjustment[2]) * posscale;
+
+        pos.x = pos1.x + (pos2.x - pos1.x) * s;
+        pos.y = pos1.y + (pos2.y - pos1.y) * s;
+        pos.z = pos1.z + (pos2.z - pos1.z) * s;
+    }
 
     *panimtrack = reinterpret_cast<const uint8_t*>(pAxisFixup + total);
 }
@@ -368,12 +519,28 @@ void r5::DP::CalcBoneScale_DP(const int sectionlength, const uint8_t** panimtrac
     const uint8_t  total = ptrack[0];
     const uint8_t* pFrameIndices = ptrack + 1;
 
-    const Vector48* pPackedData = reinterpret_cast<const Vector48*>(total >= sectionlength ? pFrameIndices : pFrameIndices + total);
+    int prevFrame, nextFrame;
+    float s;
+    const Vector48* pPackedData;
 
-    const int idx = r5::DP::ResolveFrameIndex(localFrame, total, sectionlength, pFrameIndices);
-    scale = { static_cast<float>(pPackedData[idx].x),
-              static_cast<float>(pPackedData[idx].y),
-              static_cast<float>(pPackedData[idx].z) };
+    ResolveInterpFrames_DP(prevFrame, nextFrame, s, localFrame, total, sectionlength, pFrameIndices, &pPackedData);
+
+    Vector3 s1 = { static_cast<float>(pPackedData[prevFrame].x),
+                   static_cast<float>(pPackedData[prevFrame].y),
+                   static_cast<float>(pPackedData[prevFrame].z) };
+
+    if (prevFrame == nextFrame) {
+        scale = s1;
+    }
+    else {
+        Vector3 s2 = { static_cast<float>(pPackedData[nextFrame].x),
+                       static_cast<float>(pPackedData[nextFrame].y),
+                       static_cast<float>(pPackedData[nextFrame].z) };
+
+        scale.x = s1.x + (s2.x - s1.x) * s;
+        scale.y = s1.y + (s2.y - s1.y) * s;
+        scale.z = s1.z + (s2.z - s1.z) * s;
+    }
 
     *panimtrack = reinterpret_cast<const uint8_t*>(pPackedData + total);
 }
@@ -397,7 +564,7 @@ void r5::DP::ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlen
 
             Quaternion q = rig.bones[bone].q;
             Vector3    pos = rig.bones[bone].pos;
-            Vector3    scl = anim.animdata[bone].scl[frame];
+            Vector3    scl = rig.bones[bone].scl;
 
             if (boneFlags & r5::DP::BONEROT) {
                 Quaternion dq{ 0, 0, 0, 1 };
@@ -524,6 +691,18 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
         r5::DP::ParseDataPointSection(reinterpret_cast<const uint8_t*>(pBoneFlagArray), sectionframes, sectionbaseframe, rig, anim);
         sectionbaseframe += static_cast<uint32_t>(sectionframes);
     }
+    
+    if (!(anim.flags & ANIM_DELTA)) {
+        for (int frame = 0; frame < anim.numframes; frame++) {
+            Vector3& pos = anim.animdata[0].pos[frame];
+            Vector3& rot = anim.animdata[0].rot[frame];
+
+            rot.z -= M_PI2;
+            const float x = pos.x;
+            pos.x = pos.y;
+            pos.y = -x;
+        }
+    }
 }
 template void r5::DP::ParseDataPoint<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
 template void r5::DP::ParseDataPoint<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
@@ -617,341 +796,399 @@ std::vector<int32_t> GetAnimIndexes(const uint16_t* pBlends, temp::Sequence& seq
     return blends_index_map;
 }
 
-void ParsePoseKey(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    if (!pSeqDesc->posekeyindex) return;
-
-    const auto* pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->posekeyindex);
-    const int count = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
-    seq.posekeys.insert(seq.posekeys.end(), pPosekeys, pPosekeys + count);
-}
-
 template<typename TSeqDesc>
 void ParsePoseKey(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     if (!pSeqDesc->posekeyindex) return;
 
-    const auto* pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
+    const float* pPosekeys = nullptr;
+    if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v7::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v10::mstudioseqdesc_t>)
+        pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->posekeyindex);
+    else if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>)
+        pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
+
     const int count = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
     seq.posekeys.insert(seq.posekeys.end(), pPosekeys, pPosekeys + count);
 }
+template void ParsePoseKey<r5::anim::v7::mstudioseqdesc_t>  (const r5::anim::v7::mstudioseqdesc_t*,   temp::Sequence&);
+template void ParsePoseKey<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
-void ParseEvent(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    if (!pSeqDesc->numevents) return;
-
-    bool b2ndEvent = (pSeqDesc->weightlistindex - pSeqDesc->eventindex) % 272 != 0;
-    if (!(pSeqDesc->numevents % 68)) {
-        printf("[!] Warning: events might be wrong, needed to check it manually.\n");
-        b2ndEvent = true;
-    }
-
-    for (int i = 0; i < pSeqDesc->numevents; i++) {
-        temp::seqevent_t event{};
-        if (b2ndEvent) {
-            auto* pEvents = reinterpret_cast<r5::anim::v10::mstudioevent_2_t*>((char*)pSeqDesc + pSeqDesc->eventindex);
-            event.name    = STRING_FROM_IDX(&pEvents[i], pEvents[i].szeventindex);
-            event.cycle   = pEvents[i].cycle;
-            event.event   = pEvents[i].event;
-            event.type    = pEvents[i].type;
-            event.options = std::string(pEvents[i].options);
-        }
-        else {
-            auto* pEvents = reinterpret_cast<r5::anim::v10::mstudioevent_t*>((char*)pSeqDesc + pSeqDesc->eventindex);
-            event.name    = STRING_FROM_IDX(&pEvents[i], pEvents[i].szeventindex);
-            event.cycle   = pEvents[i].cycle;
-            event.event   = pEvents[i].event;
-            event.type    = pEvents[i].type;
-            event.options = std::string(pEvents[i].options);
-        }
-        seq.events.push_back(event);
-    }
-}
 
 template<typename TSeqDesc>
 void ParseEvent(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     if (!pSeqDesc->numevents) return;
 
-    auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
-    for (int i = 0; i < pSeqDesc->numevents; i++) {
-        if (!pEvents[i].szeventindex) continue;
-
-        temp::seqevent_t event{};
-        event.name    = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].szeventindex));
-        event.cycle   = pEvents[i].cycle;
-        event.event   = pEvents[i].event;
-        event.type    = pEvents[i].type;
-        event.options = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].optionsindex));
-        seq.events.push_back(event);
+    if constexpr (std::is_same_v<TSeqDesc, r5::anim::v7::mstudioseqdesc_t>) {
+        auto* pEvents = reinterpret_cast<r5::anim::v7::mstudioevent_t*>((char*)pSeqDesc + pSeqDesc->eventindex);
+        for (int i = 0; i < pSeqDesc->numevents; i++) {
+            if (!pEvents[i].szeventindex) continue;
+            temp::seqevent_t event{};
+            event.name = STRING_FROM_IDX(&pEvents[i], pEvents[i].szeventindex);
+            event.cycle = pEvents[i].cycle;
+            event.event = pEvents[i].event;
+            event.type = pEvents[i].type;
+            event.options = std::string(pEvents[i].options);
+            seq.events.push_back(event);
+        }
+    }
+    else if constexpr (std::is_same_v<TSeqDesc, r5::anim::v10::mstudioseqdesc_t>) {
+        bool b2ndEvent = (pSeqDesc->weightlistindex - pSeqDesc->eventindex) % 272 != 0;
+        if (!(pSeqDesc->numevents % 68)) {
+            printf("[!] Warning: events might be wrong, needed to check it manually.\n");
+            b2ndEvent = true;
+        }
+        for (int i = 0; i < pSeqDesc->numevents; i++) {
+            temp::seqevent_t event{};
+            if (b2ndEvent) {
+                auto* pEvents = reinterpret_cast<r5::anim::v10::mstudioevent_2_t*>((char*)pSeqDesc + pSeqDesc->eventindex);
+                event.name = STRING_FROM_IDX(&pEvents[i], pEvents[i].szeventindex);
+                event.cycle = pEvents[i].cycle;
+                event.event = pEvents[i].event;
+                event.type = pEvents[i].type;
+                event.options = std::string(pEvents[i].options);
+            }
+            else {
+                auto* pEvents = reinterpret_cast<r5::anim::v10::mstudioevent_t*>((char*)pSeqDesc + pSeqDesc->eventindex);
+                event.name = STRING_FROM_IDX(&pEvents[i], pEvents[i].szeventindex);
+                event.cycle = pEvents[i].cycle;
+                event.event = pEvents[i].event;
+                event.type = pEvents[i].type;
+                event.options = std::string(pEvents[i].options);
+            }
+            seq.events.push_back(event);
+        }
+    }
+    else if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
+        for (int i = 0; i < pSeqDesc->numevents; i++) {
+            if (!pEvents[i].szeventindex) continue;
+            temp::seqevent_t event{};
+            event.name = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].szeventindex));
+            event.cycle = pEvents[i].cycle;
+            event.event = pEvents[i].event;
+            event.type = pEvents[i].type;
+            event.options = STRING_FROM_IDX(&pEvents[i], OFFSET(pEvents[i].optionsindex));
+            seq.events.push_back(event);
+        }
     }
 }
+template void ParseEvent<r5::anim::v7::mstudioseqdesc_t>  (const r5::anim::v7::mstudioseqdesc_t*,   temp::Sequence&);
+template void ParseEvent<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseEvent<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseEvent<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseEvent<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
-void ParseAutoLayer(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    auto* pAutolayer = reinterpret_cast<r5::anim::v7::mstudioautolayer_t*>((char*)pSeqDesc + pSeqDesc->autolayerindex);
-    for (int i = 0; i < pSeqDesc->numautolayers; i++) {
-        temp::autolayer_t autolayer{};
-        autolayer.guidSequence = pAutolayer[i].guidSequence;
-        autolayer.iSequence    = pAutolayer[i].iSequence;
-        autolayer.iPose        = pAutolayer[i].iPose;
-        autolayer.flags        = pAutolayer[i].flags;
-        autolayer.start        = pAutolayer[i].start;
-        autolayer.peak         = pAutolayer[i].peak;
-        autolayer.tail         = pAutolayer[i].tail;
-        autolayer.end          = pAutolayer[i].end;
-        seq.autolayers.push_back(autolayer);
-    }
-}
 
 template<typename TSeqDesc>
 void ParseAutoLayer(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
-    auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
-    for (int i = 0; i < pSeqDesc->numautolayers; i++) {
-        temp::autolayer_t autolayer{};
-        autolayer.guidSequence = pAutolayer[i].guidSequence;
-        autolayer.iPose        = pAutolayer[i].iPose;
-        autolayer.flags        = pAutolayer[i].flags;
-        autolayer.start        = pAutolayer[i].start;
-        autolayer.peak         = pAutolayer[i].peak;
-        autolayer.tail         = pAutolayer[i].tail;
-        autolayer.end          = pAutolayer[i].end;
-        seq.autolayers.push_back(autolayer);
+    if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v7::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v10::mstudioseqdesc_t>) {
+        auto* pAutolayer = reinterpret_cast<r5::anim::v7::mstudioautolayer_t*>((char*)pSeqDesc + pSeqDesc->autolayerindex);
+        for (int i = 0; i < pSeqDesc->numautolayers; i++) {
+            temp::autolayer_t autolayer{};
+            autolayer.guidSequence = pAutolayer[i].guidSequence;
+            autolayer.iSequence = pAutolayer[i].iSequence;
+            autolayer.iPose = pAutolayer[i].iPose;
+            autolayer.flags = pAutolayer[i].flags;
+            autolayer.start = pAutolayer[i].start;
+            autolayer.peak = pAutolayer[i].peak;
+            autolayer.tail = pAutolayer[i].tail;
+            autolayer.end = pAutolayer[i].end;
+            seq.autolayers.push_back(autolayer);
+        }
+    }
+    else if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
+        for (int i = 0; i < pSeqDesc->numautolayers; i++) {
+            temp::autolayer_t autolayer{};
+            autolayer.guidSequence = pAutolayer[i].guidSequence;
+            autolayer.iPose = pAutolayer[i].iPose;
+            autolayer.flags = pAutolayer[i].flags;
+            autolayer.start = pAutolayer[i].start;
+            autolayer.peak = pAutolayer[i].peak;
+            autolayer.tail = pAutolayer[i].tail;
+            autolayer.end = pAutolayer[i].end;
+            seq.autolayers.push_back(autolayer);
+        }
     }
 }
+template void ParseAutoLayer<r5::anim::v7::mstudioseqdesc_t>  (const r5::anim::v7::mstudioseqdesc_t*,   temp::Sequence&);
+template void ParseAutoLayer<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseAutoLayer<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseAutoLayer<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseAutoLayer<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
-void ParseWeightList(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->weightlistindex);
-    std::memcpy(seq.weightlist.data(), pWeightList, seq.weightlist.size() * sizeof(float));
-}
 
 template<typename TSeqDesc>
 void ParseWeightList(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
-    const auto idx = pSeqDesc->weightlistindex;
-    if (idx && idx != 1 && idx != 3 && idx != 5) {
-        const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(idx));
+    if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v7::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v10::mstudioseqdesc_t>) {
+        const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + pSeqDesc->weightlistindex);
         std::memcpy(seq.weightlist.data(), pWeightList, seq.weightlist.size() * sizeof(float));
     }
-    else {
-        std::fill(seq.weightlist.begin(), seq.weightlist.end(), 1.0f);
+    else if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        const auto idx = pSeqDesc->weightlistindex;
+        if (idx && idx != 1 && idx != 3 && idx != 5) {
+            const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(idx));
+            std::memcpy(seq.weightlist.data(), pWeightList, seq.weightlist.size() * sizeof(float));
+        }
+        else {
+            std::fill(seq.weightlist.begin(), seq.weightlist.end(), 1.0f);
+        }
     }
 }
+template void ParseWeightList<r5::anim::v7::mstudioseqdesc_t>  (const r5::anim::v7::mstudioseqdesc_t*,   temp::Sequence&);
+template void ParseWeightList<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseWeightList<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseWeightList<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseWeightList<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
-void ParseActMod(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq) {
-    if (!pSeqDesc->numactivitymodifiers) return;
-
-    auto* pActMod = reinterpret_cast<r5::anim::v10::mstudioactivitymodifier_t*>(
-        (char*)pSeqDesc + pSeqDesc->activitymodifierindex);
-
-    for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
-        temp::actmod_t actmod{};
-        actmod.name   = STRING_FROM_IDX(&pActMod[i], pActMod[i].sznameindex);
-        actmod.negate = pActMod->negate;
-        seq.actmods.push_back(actmod);
-    }
-}
 
 template<typename TSeqDesc>
 void ParseActMod(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     if (!pSeqDesc->numactivitymodifiers) return;
 
-    auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>(
-        (char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
-
-    for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
-        temp::actmod_t actmod{};
-        actmod.name   = STRING_FROM_IDX(&pActMod[i], OFFSET(pActMod[i].sznameindex));
-        actmod.negate = pActMod->negate;
-        seq.actmods.push_back(actmod);
+    if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v7::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v10::mstudioseqdesc_t>) {
+        auto* pActMod = reinterpret_cast<r5::anim::v7::mstudioactivitymodifier_t*>(
+            (char*)pSeqDesc + pSeqDesc->activitymodifierindex);
+        for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
+            temp::actmod_t actmod{};
+            actmod.name = STRING_FROM_IDX(&pActMod[i], pActMod[i].sznameindex);
+            actmod.negate = pActMod->negate;
+            seq.actmods.push_back(actmod);
+        }
+    }
+    else if constexpr (
+        std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>(
+            (char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
+        for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
+            temp::actmod_t actmod{};
+            actmod.name = STRING_FROM_IDX(&pActMod[i], OFFSET(pActMod[i].sznameindex));
+            actmod.negate = pActMod->negate;
+            seq.actmods.push_back(actmod);
+        }
     }
 }
+template void ParseActMod<r5::anim::v7::mstudioseqdesc_t>  (const r5::anim::v7::mstudioseqdesc_t*,   temp::Sequence&);
+template void ParseActMod<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseActMod<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseActMod<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseActMod<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
 
-void RLE::ParseIkrules(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim) {
-    if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
-    if (!pAnimDesc->numikrules) return;
-
-    auto* ikrules = reinterpret_cast<r5::anim::v10::mstudioikrule_t*>((char*)pAnimDesc + pAnimDesc->ikruleindex);
-    for (int i = 0; i < pAnimDesc->numikrules; i++) {
-        temp::ikrule_t ikrule{};
-        ikrule.index      = ikrules[i].index;
-        ikrule.type       = ikrules[i].type;
-        ikrule.chain      = ikrules[i].chain;
-        ikrule.bone       = ikrules[i].bone;
-        ikrule.slot       = ikrules[i].slot;
-        ikrule.height     = ikrules[i].height;
-        ikrule.radius     = ikrules[i].radius;
-        ikrule.floor      = ikrules[i].floor;
-        ikrule.pos        = ikrules[i].pos;
-        ikrule.q          = ikrules[i].q;
-        for (int j = 0; j < 6; j++) ikrule.scale[j] = ikrules[i].scale[j];
-        ikrule.sectionframes = ikrules[i].sectionframes;
-        ikrule.iStart     = ikrules[i].iStart;
-        ikrule.start      = ikrules[i].start;
-        ikrule.peak       = ikrules[i].peak;
-        ikrule.tail       = ikrules[i].tail;
-        ikrule.end        = ikrules[i].end;
-        ikrule.contact    = ikrules[i].contact;
-        ikrule.drop       = ikrules[i].drop;
-        ikrule.top        = ikrules[i].top;
-        ikrule.endHeight  = ikrules[i].endHeight;
-        if (ikrules[i].szattachmentindex)
-            ikrule.attachmentname = STRING_FROM_IDX(&ikrules[i], ikrules[i].szattachmentindex);
-
-        if (ikrules[i].sectionframes) {
-            ikrule.ikruledata.resize(anim.numframes);
-            const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)ikrules[i].sectionframes) + 1;
-            auto* sectionindices = reinterpret_cast<int32_t*>((char*)&ikrules[i] + ikrules[i].compressedikerrorindex);
-
-            uint32_t sectionbaseframe = 0;
-            for (uint32_t section = 0; section < sectioncount; section++) {
-                const uint32_t sectionframes = GetSectionLength(anim.numframes, ikrules[i].sectionframes, section);
-                auto* offsets = reinterpret_cast<int16_t*>((char*)&ikrules[i] + sectionindices[section]);
-
-                for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
-                    const uint32_t frame = sectionbaseframe + localframe;
-                    for (int idx = 0; idx < 3; idx++) {
-                        auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
-                        RLE::ExtractAnimValue(localframe, panimvalue, ikrules[i].scale[idx], ikrule.ikruledata.pos[frame][idx]);
-                    }
-                }
-                sectionbaseframe += sectionframes;
-            }
-        }
-        anim.ikrules.push_back(ikrule);
-    }
-}
 
 template<typename TAnimDesc>
 void RLE::ParseIkrules(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
     if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
-    if (!pAnimDesc->numikrules || pAnimDesc->ikruleindex == 3 || pAnimDesc->ikruleindex == 5) return;
+    if (!pAnimDesc->numikrules) return;
 
-    auto* ikrules = reinterpret_cast<r5::anim::v11::mstudioikrule_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->ikruleindex));
-    for (int i = 0; i < pAnimDesc->numikrules; i++) {
-        temp::ikrule_t ikrule{};
-        ikrule.type       = ikrules[i].type;
-        ikrule.chain      = ikrules[i].chain;
-        ikrule.bone       = ikrules[i].bone;
-        ikrule.slot       = ikrules[i].slot;
-        ikrule.height     = ikrules[i].height;
-        ikrule.radius     = ikrules[i].radius;
-        ikrule.floor      = ikrules[i].floor;
-        ikrule.pos        = ikrules[i].pos;
-        ikrule.q          = ikrules[i].q;
-        for (int j = 0; j < 6; j++) ikrule.scale[j] = ikrules[i].scale[j];
-        ikrule.sectionframes = ikrules[i].sectionframes;
-        ikrule.iStart     = ikrules[i].iStart;
-        ikrule.start      = ikrules[i].start;
-        ikrule.peak       = ikrules[i].peak;
-        ikrule.tail       = ikrules[i].tail;
-        ikrule.end        = ikrules[i].end;
-        ikrule.contact    = ikrules[i].contact;
-        ikrule.drop       = ikrules[i].drop;
-        ikrule.top        = ikrules[i].top;
-        ikrule.endHeight  = ikrules[i].endHeight;
-        if (ikrules[i].szattachmentindex)
-            ikrule.attachmentname = STRING_FROM_IDX(&ikrules[i], OFFSET(ikrules[i].szattachmentindex));
+    if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v71::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t>) {
+        auto* ikrules = reinterpret_cast<r5::anim::v7::mstudioikrule_t*>((char*)pAnimDesc + pAnimDesc->ikruleindex);
+        for (int i = 0; i < pAnimDesc->numikrules; i++) {
+            temp::ikrule_t ikrule{};
+            ikrule.index = ikrules[i].index;
+            ikrule.type = ikrules[i].type;
+            ikrule.chain = ikrules[i].chain;
+            ikrule.bone = ikrules[i].bone;
+            ikrule.slot = ikrules[i].slot;
+            ikrule.height = ikrules[i].height;
+            ikrule.radius = ikrules[i].radius;
+            ikrule.floor = ikrules[i].floor;
+            ikrule.pos = ikrules[i].pos;
+            ikrule.q = ikrules[i].q;
+            for (int j = 0; j < 6; j++) ikrule.scale[j] = ikrules[i].scale[j];
+            ikrule.sectionframes = ikrules[i].sectionframes;
+            ikrule.iStart = ikrules[i].iStart;
+            ikrule.start = ikrules[i].start;
+            ikrule.peak = ikrules[i].peak;
+            ikrule.tail = ikrules[i].tail;
+            ikrule.end = ikrules[i].end;
+            ikrule.contact = ikrules[i].contact;
+            ikrule.drop = ikrules[i].drop;
+            ikrule.top = ikrules[i].top;
+            ikrule.endHeight = ikrules[i].endHeight;
+            if (ikrules[i].szattachmentindex)
+                ikrule.attachmentname = STRING_FROM_IDX(&ikrules[i], ikrules[i].szattachmentindex);
 
-        if (ikrules[i].sectionframes) {
-            ikrule.ikruledata.resize(anim.numframes);
-            const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)ikrules[i].sectionframes) + 1;
-            auto* sectionindices = reinterpret_cast<uint16_t*>((char*)&ikrules[i] + OFFSET(ikrules[i].compressedikerrorindex));
+            if (ikrules[i].sectionframes) {
+                ikrule.ikruledata.resize(anim.numframes);
+                const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)ikrules[i].sectionframes) + 1;
+                auto* sectionindices = reinterpret_cast<int32_t*>((char*)&ikrules[i] + ikrules[i].compressedikerrorindex);
 
-            uint32_t sectionbaseframe = 0;
-            for (uint32_t section = 0; section < sectioncount; section++) {
-                const uint32_t sectionframes = GetSectionLength(anim.numframes, ikrules[i].sectionframes, section);
-                auto* offsets = reinterpret_cast<int16_t*>((char*)&ikrules[i] + OFFSET(sectionindices[section]));
+                uint32_t sectionbaseframe = 0;
+                for (uint32_t section = 0; section < sectioncount; section++) {
+                    const uint32_t sectionframes = GetSectionLength(anim.numframes, ikrules[i].sectionframes, section);
+                    auto* offsets = reinterpret_cast<int16_t*>((char*)&ikrules[i] + sectionindices[section]);
 
-                for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
-                    const uint32_t frame = sectionbaseframe + localframe;
-                    for (int idx = 0; idx < 3; idx++) {
-                        auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
-                        RLE::ExtractAnimValue(localframe, panimvalue, ikrules[i].scale[idx], ikrule.ikruledata.pos[frame][idx]);
+                    for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+                        const uint32_t frame = sectionbaseframe + localframe;
+                        for (int idx = 0; idx < 3; idx++) {
+                            auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
+                            RLE::ExtractAnimValue(localframe, panimvalue, ikrules[i].scale[idx], ikrule.ikruledata.pos[frame][idx]);
+                        }
                     }
+                    sectionbaseframe += sectionframes;
                 }
-                sectionbaseframe += sectionframes;
             }
+            anim.ikrules.push_back(ikrule);
         }
-        anim.ikrules.push_back(ikrule);
+    }
+    else if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        if (pAnimDesc->ikruleindex == 3 || pAnimDesc->ikruleindex == 5) return;
+
+        auto* ikrules = reinterpret_cast<r5::anim::v11::mstudioikrule_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->ikruleindex));
+        for (int i = 0; i < pAnimDesc->numikrules; i++) {
+            temp::ikrule_t ikrule{};
+            ikrule.type = ikrules[i].type;
+            ikrule.chain = ikrules[i].chain;
+            ikrule.bone = ikrules[i].bone;
+            ikrule.slot = ikrules[i].slot;
+            ikrule.height = ikrules[i].height;
+            ikrule.radius = ikrules[i].radius;
+            ikrule.floor = ikrules[i].floor;
+            ikrule.pos = ikrules[i].pos;
+            ikrule.q = ikrules[i].q;
+            for (int j = 0; j < 6; j++) ikrule.scale[j] = ikrules[i].scale[j];
+            ikrule.sectionframes = ikrules[i].sectionframes;
+            ikrule.iStart = ikrules[i].iStart;
+            ikrule.start = ikrules[i].start;
+            ikrule.peak = ikrules[i].peak;
+            ikrule.tail = ikrules[i].tail;
+            ikrule.end = ikrules[i].end;
+            ikrule.contact = ikrules[i].contact;
+            ikrule.drop = ikrules[i].drop;
+            ikrule.top = ikrules[i].top;
+            ikrule.endHeight = ikrules[i].endHeight;
+            if (ikrules[i].szattachmentindex)
+                ikrule.attachmentname = STRING_FROM_IDX(&ikrules[i], OFFSET(ikrules[i].szattachmentindex));
+
+            if (ikrules[i].sectionframes) {
+                ikrule.ikruledata.resize(anim.numframes);
+                const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)ikrules[i].sectionframes) + 1;
+                auto* sectionindices = reinterpret_cast<uint16_t*>((char*)&ikrules[i] + OFFSET(ikrules[i].compressedikerrorindex));
+
+                uint32_t sectionbaseframe = 0;
+                for (uint32_t section = 0; section < sectioncount; section++) {
+                    const uint32_t sectionframes = GetSectionLength(anim.numframes, ikrules[i].sectionframes, section);
+                    auto* offsets = reinterpret_cast<int16_t*>((char*)&ikrules[i] + OFFSET(sectionindices[section]));
+
+                    for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+                        const uint32_t frame = sectionbaseframe + localframe;
+                        for (int idx = 0; idx < 3; idx++) {
+                            auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
+                            RLE::ExtractAnimValue(localframe, panimvalue, ikrules[i].scale[idx], ikrule.ikruledata.pos[frame][idx]);
+                        }
+                    }
+                    sectionbaseframe += sectionframes;
+                }
+            }
+            anim.ikrules.push_back(ikrule);
+        }
     }
 }
+template void RLE::ParseIkrules<r5::anim::v71::mstudioanimdesc_t> (const r5::anim::v71::mstudioanimdesc_t*,  temp::animdesc_t&);
+template void RLE::ParseIkrules<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseIkrules<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseIkrules<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseIkrules<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
 
-void RLE::ParseFrameMovements(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim) {
-    if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
-    if (!(pAnimDesc->flags & r5::ANIM_FRAMEMOVEMENT) || !pAnimDesc->framemovementindex) return;
-
-    auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + pAnimDesc->framemovementindex);
-    auto* sectionindices = reinterpret_cast<int32_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
-    const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
-
-    temp::framemovement_t movement{};
-    movement.scale         = pFrameMovement->scale;
-    movement.sectionframes = pFrameMovement->sectionframes;
-    movement.movementdata.resize(anim.numframes);
-
-    uint32_t sectionbaseframe = 0;
-    for (uint32_t section = 0; section < sectioncount; section++) {
-        const uint32_t sectionframes = GetSectionLength(anim.numframes, pFrameMovement->sectionframes, section);
-        auto* offsets = reinterpret_cast<int16_t*>((char*)pFrameMovement + sectionindices[section]);
-
-        for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
-            const uint32_t frame = sectionbaseframe + localframe;
-            for (int idx = 0; idx < 4; idx++) {
-                if (!offsets[idx]) continue;
-                auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
-                RLE::ExtractAnimValue(localframe, panimvalue, pFrameMovement->scale[idx], movement.movementdata[frame][idx]);
-            }
-        }
-        sectionbaseframe += sectionframes;
-    }
-    anim.movement = movement;
-}
 
 template<typename TAnimDesc>
 void RLE::ParseFrameMovements(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
     if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
     if (!(pAnimDesc->flags & r5::ANIM_FRAMEMOVEMENT) || !pAnimDesc->framemovementindex) return;
-    if (pAnimDesc->flags & ANIM_DATAPOINT) return;
 
-    auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->framemovementindex));
-    auto* sectionindices = reinterpret_cast<uint16_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
-    const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
+    if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v71::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t>) {
+        auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + pAnimDesc->framemovementindex);
+        auto* sectionindices = reinterpret_cast<int32_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
+        const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
 
-    temp::framemovement_t movement{};
-    movement.scale         = pFrameMovement->scale;
-    movement.sectionframes = pFrameMovement->sectionframes;
-    movement.movementdata.resize(anim.numframes);
+        temp::framemovement_t movement{};
+        movement.scale = pFrameMovement->scale;
+        movement.sectionframes = pFrameMovement->sectionframes;
+        movement.movementdata.resize(anim.numframes);
 
-    uint32_t sectionbaseframe = 0;
-    for (uint32_t section = 0; section < sectioncount; section++) {
-        const uint32_t sectionframes = GetSectionLength(anim.numframes, pFrameMovement->sectionframes, section);
-        auto* offsets = reinterpret_cast<int16_t*>((char*)pFrameMovement + OFFSET(sectionindices[section]));
+        uint32_t sectionbaseframe = 0;
+        for (uint32_t section = 0; section < sectioncount; section++) {
+            const uint32_t sectionframes = GetSectionLength(anim.numframes, pFrameMovement->sectionframes, section);
+            auto* offsets = reinterpret_cast<int16_t*>((char*)pFrameMovement + sectionindices[section]);
 
-        for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
-            const uint32_t frame = sectionbaseframe + localframe;
-            for (int idx = 0; idx < 4; idx++) {
-                if (!offsets[idx]) continue;
-                auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
-                RLE::ExtractAnimValue(localframe, panimvalue, pFrameMovement->scale[idx], movement.movementdata[frame][idx]);
+            for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+                const uint32_t frame = sectionbaseframe + localframe;
+                for (int idx = 0; idx < 4; idx++) {
+                    if (!offsets[idx]) continue;
+                    auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
+                    RLE::ExtractAnimValue(localframe, panimvalue, pFrameMovement->scale[idx], movement.movementdata[frame][idx]);
+                }
             }
+            sectionbaseframe += sectionframes;
         }
-        sectionbaseframe += sectionframes;
+        anim.movement = movement;
     }
-    anim.movement = movement;
+    else if constexpr (
+        std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        if (pAnimDesc->flags & ANIM_DATAPOINT) return;
+
+        auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->framemovementindex));
+        auto* sectionindices = reinterpret_cast<uint16_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
+        const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
+
+        temp::framemovement_t movement{};
+        movement.scale = pFrameMovement->scale;
+        movement.sectionframes = pFrameMovement->sectionframes;
+        movement.movementdata.resize(anim.numframes);
+
+        uint32_t sectionbaseframe = 0;
+        for (uint32_t section = 0; section < sectioncount; section++) {
+            const uint32_t sectionframes = GetSectionLength(anim.numframes, pFrameMovement->sectionframes, section);
+            auto* offsets = reinterpret_cast<int16_t*>((char*)pFrameMovement + OFFSET(sectionindices[section]));
+
+            for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
+                const uint32_t frame = sectionbaseframe + localframe;
+                for (int idx = 0; idx < 4; idx++) {
+                    if (!offsets[idx]) continue;
+                    auto* panimvalue = reinterpret_cast<r5::anim::mstudioanimvalue_t*>((char*)offsets + offsets[idx]);
+                    RLE::ExtractAnimValue(localframe, panimvalue, pFrameMovement->scale[idx], movement.movementdata[frame][idx]);
+                }
+            }
+            sectionbaseframe += sectionframes;
+        }
+        anim.movement = movement;
+    }
 }
+template void RLE::ParseFrameMovements<r5::anim::v71::mstudioanimdesc_t> (const r5::anim::v71::mstudioanimdesc_t*,  temp::animdesc_t&);
+template void RLE::ParseFrameMovements<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::v10::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);

@@ -97,6 +97,124 @@ static std::vector<char> ReadFileDirect(const std::string& path, size_t& outSize
 }
 
 // ============================================================================
+//  ParseRSEQ_v7.1
+// ============================================================================
+
+void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
+    ProgressBar bar(rig.rseqpaths.size());
+    std::vector<std::future<void>> tasks;
+    std::mutex mutex;
+
+    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+
+    tasks.reserve(rig.rseqpaths.size());
+    for (const auto& file : rig.rseqpaths) {
+        tasks.push_back(std::async(std::launch::async, [&, file]() {
+            const std::string path = in_dir + "\\" + file;
+            const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
+
+            if (!std::filesystem::is_regular_file(path)) {
+                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                return;
+            }
+
+            size_t inputFileSize;
+            std::vector<char> buffer = ReadFileDirect(path, inputFileSize);
+            const std::string out_dir = BuildOutputPath(in_dir, rel);
+
+            if (inputFileSize <= sizeof(anim::v7::mstudioseqdesc_t)) {
+                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                return;
+            }
+
+            auto* pSeqDesc = reinterpret_cast<anim::v7::mstudioseqdesc_t*>(buffer.data());
+            const std::string seqname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szlabelindex);
+            const std::string activityname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szactivitynameindex);
+            const int numanims = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
+            const int numbones = (int)rig.bones.size();
+
+            temp::Sequence seq(seqname, numbones);
+            seq.anims.reserve(24);
+            PopulateSeqCommon(seq, pSeqDesc, path, out_dir, activityname);
+
+            seq.paramparent = pSeqDesc->paramparent;
+            seq.nodeflags = pSeqDesc->nodeflags;
+            seq.entryphase = pSeqDesc->entryphase;
+            seq.exitphase = pSeqDesc->exitphase;
+            seq.lastframe = pSeqDesc->lastframe;
+            seq.nextseq = pSeqDesc->nextseq;
+            seq.pose = pSeqDesc->pose;
+
+            verbose("%s\n", seqname.c_str());
+
+            ParsePoseKey(pSeqDesc, seq);
+            ParseEvent(pSeqDesc, seq);
+            ParseAutoLayer(pSeqDesc, seq);
+            ParseWeightList(pSeqDesc, seq);
+            ParseActMod(pSeqDesc, seq);
+
+            auto* pBlends = PTR_FROM_IDX(int, pSeqDesc, pSeqDesc->animindexindex);
+            std::vector<int32_t> animIndexes = GetAnimIndexes(pBlends, seq, numanims);
+
+            const uint32_t bfa_size = ((numbones + 3) / 2) & ~1u;
+
+            for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+                auto* pAnimDesc = PTR_FROM_IDX(anim::v71::mstudioanimdesc_t, pSeqDesc, animIndexes[anim_iter]);
+
+                temp::animdesc_t anim{};
+                anim.name = STRING_FROM_IDX(pAnimDesc, pAnimDesc->sznameindex);
+                anim.fps = pAnimDesc->fps;
+                anim.flags = pAnimDesc->flags;
+                anim.numframes = pAnimDesc->numframes;
+                anim.InitData(rig, seq.IsAdditive());
+
+                if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
+
+                uint32_t num_sections = 1;
+                anim::mstudioanimsections_t* animsections{};
+                if (pAnimDesc->sectionindex) {
+                    num_sections = GetSectionCount(*pAnimDesc);
+                    animsections = PTR_FROM_IDX(anim::mstudioanimsections_t, pAnimDesc, pAnimDesc->sectionindex);
+                }
+
+                uint32_t sectionbaseframe = 0;
+                for (uint32_t section = 0; section < num_sections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+
+                    char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
+                    if (pAnimDesc->sectionindex) {
+                        if (animsections[section].isExternal) {
+                            seq.extn = LoadFile(path + "_extn");
+                            if (animsections[section].animidx >= seq.extn.size)
+                                PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: Passed the end of .rseq_extn");
+                            pBFA = PTR_FROM_IDX(char, seq.extn.buffer.data(), animsections[section].animidx);
+                        }
+                        else {
+                            pBFA = PTR_FROM_IDX(char, pAnimDesc, animsections[section].animidx);
+                        }
+                    }
+
+                    ParseRLESection(pBFA, numbones, bfa_size, sectionbaseframe, sectionframes, anim);
+                    sectionbaseframe += sectionframes;
+                }
+
+                RLE::ParseIkrules(pAnimDesc, anim);
+                RLE::ParseFrameMovements(pAnimDesc, anim);
+                seq.anims.push_back(std::move(anim));
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                rig.sequences.push_back(std::move(seq));
+            }
+            }));
+        if (!_enable_verbose) bar.AddAndPrint();
+    }
+    for (auto& t : tasks) t.get();
+    printf("\n");
+}
+
+// ============================================================================
 //  ParseRSEQ_v10
 // ============================================================================
 
@@ -213,7 +331,6 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
     for (auto& t : tasks) t.get();
     printf("\n");
 }
-
 
 // ============================================================================
 //  ParseRSEQ_v11

@@ -74,8 +74,6 @@ namespace r5 {
         void CalcBoneQuaternion(const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t** BoneTrackData, Vector3& trackval, uint32_t localframe);
         void CalcBoneScale     (const r5::anim::mstudio_rle_anim_t& pAnim, uint16_t** BoneTrackData, Vector3& trackval, uint32_t localframe);
 
-        void ParseIkrules       (const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim);
-        void ParseFrameMovements(const r5::anim::v10::mstudioanimdesc_t* pAnimDesc, temp::animdesc_t& anim);
         template<typename TAnimDesc> void ParseIkrules       (const TAnimDesc* pAnimDesc, temp::animdesc_t& anim);
         template<typename TAnimDesc> void ParseFrameMovements(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim);
     }
@@ -88,18 +86,13 @@ template<typename TAnimDesc> int GetSectionCount (const TAnimDesc& animdesc);
 std::vector<int32_t> GetAnimIndexes(const int32_t*  pBlends, temp::Sequence& seq, int32_t numanims);
 std::vector<int32_t> GetAnimIndexes(const uint16_t* pBlends, temp::Sequence& seq, int32_t numanims);
 
-void ParsePoseKey   (const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq);
-void ParseEvent     (const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq);
-void ParseAutoLayer (const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq);
-void ParseWeightList(const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq);
-void ParseActMod    (const r5::anim::v10::mstudioseqdesc_t* pSeqDesc, temp::Sequence& seq);
-
 template<typename TSeqDesc> void ParsePoseKey   (const TSeqDesc* pSeqDesc, temp::Sequence& seq);
 template<typename TSeqDesc> void ParseEvent     (const TSeqDesc* pSeqDesc, temp::Sequence& seq);
 template<typename TSeqDesc> void ParseAutoLayer (const TSeqDesc* pSeqDesc, temp::Sequence& seq);
 template<typename TSeqDesc> void ParseWeightList(const TSeqDesc* pSeqDesc, temp::Sequence& seq);
 template<typename TSeqDesc> void ParseActMod    (const TSeqDesc* pSeqDesc, temp::Sequence& seq);
 
+void ParseRSEQ_v71 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v10 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v11 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v12 (std::string in_dir, temp::rig_t& rig);

@@ -178,6 +178,27 @@ namespace r5 {
 			};
 		}
 
+		namespace v71 {
+			struct mstudioanimdesc_t {
+				int baseptr;
+				int sznameindex;
+				float fps;
+				int flags;
+				int numframes;
+				int nummovements;
+				int movementindex;
+				int framemovementindex;
+				int animindex;
+				int numikrules;
+				int ikruleindex;
+				int sectionindex;
+				int sectionstallframes;
+				int sectionframes;
+				int64_t unk1;
+				int64_t sectionDataExternal;
+			};
+		}
+
 		namespace v10 {
 			struct mstudioanim_valueptr_t {
 				int16_t offset : 13;

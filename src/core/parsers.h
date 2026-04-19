@@ -14,6 +14,8 @@ struct ParserSet {
 };
 
 static const std::unordered_map<std::string, ParserSet> Parsers = {
+	{"7",  {ParseRRIG_v121, ParseRSEQ_v71}},
+	{"8",  {ParseRRIG_v121, ParseRSEQ_v71}},
 	{"9",  {ParseRRIG_v121, ParseRSEQ_v10}},
 	{"10", {ParseRRIG_v121, ParseRSEQ_v10}},
 	{"11", {ParseRRIG_v121, ParseRSEQ_v10}},

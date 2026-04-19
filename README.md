@@ -15,7 +15,7 @@ Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>
 ```
 
 >**Options**
->* `-i <in_season>`  : Input assets season (default: 23)
+>* `-i <in_season>`  : Input assets season (default: 28)
 >* `-o <out_season>` : Output assets season (default: 3)
 >* `-verbose`    : Verbose outputs
 >* `-ne`         : No RePak Entries outputs
@@ -33,7 +33,7 @@ Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>
 >- v53
 
 >**RSEQ Mode**
->- Seasons **S9 – S23**
+>- Seasons **S7 – S28**
 
 ---
 ### Based on:

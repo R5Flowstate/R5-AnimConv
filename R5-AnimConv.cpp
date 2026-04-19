@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
 	std::string input_mdl;
 	std::string override_rseq_path;
 	std::string override_rrig_path;
-	std::string in_season = "23";
+	std::string in_season = "28";
 	std::string out_season = "3";
 	bool bSkipEvents = false;
 	bool bNoPause = false;

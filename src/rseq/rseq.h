@@ -55,7 +55,7 @@ namespace r5 {
 
         void ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlength, uint32_t sectionbaseframe, temp::rig_t& rig, temp::animdesc_t& anim);
         template<typename TAnimDesc> void ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::Sequence& seq, temp::animdesc_t& anim);
-        template<typename TAnimDesc>  void ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim);
+        template<typename TAnimDesc> void ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim);
     }
 
     namespace RLE {
@@ -103,3 +103,6 @@ template<typename TVecType> void WriteAnimData(char*& pData, const std::vector<T
 template<typename TVecType> void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, temp::animblock_t c, int axis, float scale, const std::vector<int16_t>* poly_coeffs = nullptr);
 
 void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents = false);
+
+extern std::vector<unsigned char> comptypes;
+extern float g_AnimCompressError;

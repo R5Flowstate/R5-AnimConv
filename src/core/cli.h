@@ -15,6 +15,16 @@
         continue; \
     }
 
+#define ARG_FLT(opt, var, err) \
+    if (arg == opt) { \
+        if (++i >= argc) { \
+            printf("%s\n", err); \
+            return 1; \
+        } \
+        var = atof(argv[i]); \
+        continue; \
+    }
+
 #define ARG_VAL(opt, var, err) \
     if (arg == opt) { \
         if (++i >= argc) { \

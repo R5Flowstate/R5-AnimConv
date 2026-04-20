@@ -96,9 +96,17 @@ static int RunRseqMode(const std::string& input_path, const std::string& in_seas
 	}
 
 	/* PRINT REPAK ENTRIES */
-	if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
+	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
 	for (auto& rig : rigs)  PrintRepakEntries(rig);
 	verbose("[+] Succeeded!\n"); 
+
+#ifdef _DEBUG
+	printf("Animation Data Compressed Types:\n");
+	for (int i = 0; i < 8; i++) {
+		printf("\t%d: %d\n", i, comptypes[i]);
+	}
+#endif // _DEBUG
+
 	if (!bNoPause) system("pause");
 	return 0;
 }
@@ -152,7 +160,7 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 	WriteRSEQ_v7(rig);
 
 	/* PRINT REPAK ENTRIES */
-	if (!_enable_no_entry) printf("\n\nRePak Entries:\n");
+	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
 	PrintRepakEntries(rig);
 	verbose("[+] Succeeded!\n");
 	if (!bNoPause) system("pause");
@@ -169,17 +177,18 @@ int main(int argc, char* argv[]) {
 	bool bNoPause = false;
 
 	std::string usage = "Usage: \n" \
-		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-verbose] [-ne] [-rp <override_rrig_path>] [-sp <override_rseq_path>]\n" \
-		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-verbose] [-ne]\n";
+		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]\n" \
+		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]\n";
 
-	// -i <in_season>  : Input assets season (default: 23)
-	// -o <out_season> : Output assets season (default: 3)
-	// -verbose    : Verbose outputs
-	// -ne         : No RePak Entries outputs
-	// -skipevents : Skip events for debugging
-	// -nopause    : No pause at the end of execution
-	// -rp <override_rrig_path> : Override internal rrig path //e.g. -rp "animrig/titans/buddy"
-	// -sp <override_rseq_path> : Override internal rseq path //e.g. -sp "animseq/titans/buddy_sp" to avoid autolayer guid mismatch
+	// `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
+	// `-o <out_season>` : Output assets season, only season 3 available for now (default: 3)
+	// `-verbose`    : Verbose outputs
+	// `-ne`         : No RePak Entries outputs
+	// `-skipevents` : Skip any events that might crash if lag of asset
+	// `-nopause`    : No pause at the end of execution
+	// `-comperr`    : Acceptable compression error, Recommended 0.5-2.0 (~3-10 % smaller without noticeable visual), 0.0 for lossless (default: 1.0)
+	// `-rp <override_rrig_path>` : Override internal rrig path (only: Mdl mode)
+	// `-sp <override_rseq_path>` : Override internal rseq path (only: Mdl mode)
 
 	if (argc < 2) {
 		printf("%s", usage.c_str());
@@ -192,10 +201,11 @@ int main(int argc, char* argv[]) {
 		std::string arg = argv[i];
 		ARG_VAL("-i", in_season, "[!] Error: -i requires input assets season.\n");
 		ARG_VAL("-o", out_season, "[!] Error: -o requires output assets season.\n");
-		ARG_BOOL("-verbose", _enable_verbose);
-		ARG_BOOL("-ne", _enable_no_entry);
+		ARG_BOOL("-verbose", g_EnableVerbose);
+		ARG_BOOL("-ne", g_NoEntries);
 		ARG_BOOL("-skipevents", bSkipEvents);
 		ARG_BOOL("-nopause", bNoPause);
+		ARG_FLT("-comperr", g_AnimCompressError, "[!] Error: -comperr requires a number.\n");
 		ARG_VAL("-rp", override_rrig_path, "[!] Error: -rp requires a path argument.\n");
 		ARG_VAL("-sp", override_rseq_path, "[!] Error: -sp requires a path argument.\n");
 

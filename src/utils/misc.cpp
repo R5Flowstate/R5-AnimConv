@@ -28,7 +28,7 @@ void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, st
 }
 
 void PrintRepakEntries(temp::rig_t& rig) {
-	if (_enable_no_entry) return;
+	if (g_NoEntries) return;
 	std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
 	for (auto& name : rig.rseqpaths) std::replace(name.begin(), name.end(), '\\', '/');
 	for (auto& name : rig.rigpaths) std::replace(name.begin(), name.end(), '\\', '/');

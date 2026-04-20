@@ -8,21 +8,22 @@ into ReSource Animation file formats.
 ### Usage
 
 ```bash
-Mdl  mode : R5-AnimConv.exe <model.mdl> [-verbose] [-ne] [-rp <override_rrig_path>] [-sp <override_rseq_path>]
+Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]
 ```
 ```bash
-Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-verbose] [-ne]
+Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]
 ```
 
 >**Options**
->* `-i <in_season>`  : Input assets season (default: 28)
+>* `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
 >* `-o <out_season>` : Output assets season (default: 3)
 >* `-verbose`    : Verbose outputs
 >* `-ne`         : No RePak Entries outputs
->* `-skipevents` : Skip sequence events
+>* `-skipevents` : Skip any events that might crash if lag of asset
 >* `-nopause`    : No pause at the end of execution
->* `-rp <override_rrig_path>` : Override internal rrig path
->* `-sp <override_rseq_path>` : Override internal rseq path
+>* `-comperr`    : Acceptable compression error, Recommended 0.5-2.0 (~3-10% smaller without noticeable visual) (default: 1.0)
+>* `-rp <override_rrig_path>` : Override internal rrig path (only: Mdl mode)
+>* `-sp <override_rseq_path>` : Override internal rseq path (only: Mdl mode)
 
 ---
 

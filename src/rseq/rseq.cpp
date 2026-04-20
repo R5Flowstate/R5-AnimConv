@@ -105,7 +105,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -208,7 +208,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
             }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");
@@ -223,7 +223,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -326,7 +326,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");
@@ -341,7 +341,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -427,7 +427,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");
@@ -443,7 +443,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -538,7 +538,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");
@@ -554,7 +554,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!_enable_verbose && !rig.rseqpaths.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -667,7 +667,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");
@@ -680,8 +680,9 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
 void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
     ProgressBar bar(rig.sequences.size());
     std::vector<std::future<void>> tasks;
+    std::mutex mutex;
 
-    if (!_enable_verbose && !rig.sequences.empty()) bar.Print();
+    if (!g_EnableVerbose && !rig.sequences.empty()) bar.Print();
 
     tasks.reserve(rig.sequences.size());
     for (auto& seq : rig.sequences) {
@@ -1068,8 +1069,14 @@ void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
             pData = stringTables.Write(pData);
             ALIGN4(pData);
             outRseq.write(pBase, pData - pBase);
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                seq.anims.clear();
+            }
+
         }));
-        if (!_enable_verbose) bar.AddAndPrint();
+        if (!g_EnableVerbose) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
     printf("\n");

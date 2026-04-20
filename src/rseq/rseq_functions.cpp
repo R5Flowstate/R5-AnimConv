@@ -3,6 +3,9 @@
 
 using namespace r5;
 
+std::vector<unsigned char> comptypes(8);
+float g_AnimCompressError = 1.f;
+
 static char  s_FrameBitCountLUT[4]  { 0, 2, 4, 0 };
 static float s_FrameValOffsetLUT[4] { 0.0f, 3.0f, 15.0f, 0.0f };
 static char  s_AnimSeekLUT[60] {
@@ -11,8 +14,6 @@ static char  s_AnimSeekLUT[60] {
     2,  5,  15, 2,  6,  15, 2,  7,  15, 2,  2,  15, 4,  3,  15, 4,
     4,  15, 4, 5, 15, 4, 6, 15, 4,  7,  15, 4,
 };
-
-extern float HalfToFloat(uint16_t h);
 
 int GetSectionLength(const int numframes, const int sectionframes, const int section) {
     if (!sectionframes)
@@ -1248,51 +1249,10 @@ static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& c
 }
 
 template<typename TVecType>
-static uint8_t ChooseBestType(const std::vector<TVecType>& raw, uint32_t start, uint32_t end, int axis, float scale, std::vector<int16_t>* coeffs_out = nullptr) {
-    const int N = (int)(end - start);
-    if (N <= 0) return 0;
-
-    std::vector<int16_t> qv(N);
-    for (int i = 0; i < N; i++)
-        qv[i] = (int16_t)std::round(raw[start + i][axis] / scale);
-
-    bool constant = true;
-    for (int i = 1; i < N; i++) if (qv[i] != qv[0]) { constant = false; break; }
-    if (constant && N >= 3) return 2;
-    if (N <= 2) return 0;
-
-    bool fits = true;
-    for (int i = 1; i < N; i++) {
-        int d = (int)qv[i] - (int)qv[0];
-        if (d < -128 || d > 127) { 
-            fits = false; break; 
-        }
-    }
-    if (fits) return 1;
-    
-
-    uint8_t best_type = 0;
-    int     best_sz = 2 + N * 2;
-    for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
-        std::vector<int16_t> coeffs;
-        float max_err;
-        FitPoly(qv.data(), N, deg, coeffs, max_err);
-        if (max_err < 0.5f) {
-            const int poly_sz = 2 + (1 + deg) * 2;
-            if (poly_sz < best_sz) {
-                best_sz = poly_sz;
-                best_type = (uint8_t)(2 + deg);
-                if (coeffs_out) *coeffs_out = coeffs;
-            }
-            break;
-        }
-    }
-    return best_type;
-}
-
-template<typename TVecType>
 void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, temp::animblock_t c, int axis, float scale, const std::vector<int16_t>* poly_coeffs) { 
     const int N = (int)(c.end - c.start);
+
+    comptypes[c.type]++; // store statistics
 
     auto* hdr = reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData);
     pData += 2;
@@ -1364,9 +1324,10 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             temp::animblock_t ab{ type, (uint32_t)(startframe + start), (uint32_t)(startframe + end) };
             WriteCompressedAnim(pData, rawdata, ab, axis, scale, pc);
         } else {
+            const uint8_t chunk_type = (type == 1 || type >= 3) ? (uint8_t)0 : type;
             for (int off = 0; off < n; ) {
                 const int chunk = std::min(255, n - off);
-                temp::animblock_t ab{ type, (uint32_t)(startframe + start + off), (uint32_t)(startframe + start + off + chunk) };
+                temp::animblock_t ab{ chunk_type, (uint32_t)(startframe + start + off), (uint32_t)(startframe + start + off + chunk) };
                 WriteCompressedAnim(pData, rawdata, ab, axis, scale, nullptr);
                 off += chunk;
             }
@@ -1390,7 +1351,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
         }
 
         int t1end = pos + 1;
-        while (t1end < total_frames) {
+        while (t1end < total_frames && (t1end - pos) < 255) {
             int d = (int)qv[t1end] - (int)qv[pos];
             if (d < -128 || d > 127) break;
             t1end++;
@@ -1425,7 +1386,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                     std::vector<int16_t> c;
                     float err;
                     FitPoly(qv.data() + pos, pN, deg, c, err);
-                    if (err < 1.0f) {
+                    if (err < g_AnimCompressError) {
                         const int poly_sz = BlockByteCost((uint8_t)(2 + deg), pN);
                         if (poly_sz < separate_cost) {
                             const int idx = (int)blocks.size();
@@ -1447,7 +1408,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                     std::vector<int16_t> c;
                     float err;
                     FitPoly(qv.data() + pos, t1N, deg, c, err);
-                    if (err < 1.0f) {
+                    if (err < g_AnimCompressError) {
                         const int poly_sz = BlockByteCost((uint8_t)(2 + deg), t1N);
                         if (poly_sz < t1_cost) {
                             const int idx = (int)blocks.size();
@@ -1486,7 +1447,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                 std::vector<int16_t> c;
                 float err;
                 FitPoly(qv.data() + pos, rN, deg, c, err);
-                if (err < 0.5f) {
+                if (err < g_AnimCompressError) {
                     const int poly_sz = BlockByteCost((uint8_t)(2 + deg), rN);
                     if (poly_sz < raw_cost) {
                         const int idx = (int)blocks.size();
@@ -1546,10 +1507,21 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                     int pe = a + best_pi + best_plen + 1;
                     if (best_pi == 0 && qv[a] == pval) ps = a;
 
-                    if (ps > a) processed.push_back({ 1, a, ps });
-                    processed.push_back({ 2, ps, pe });
-                    if (pe < b) processed.push_back({ 1, pe, b });
-                    continue;
+                    bool split_valid = true;
+                    if (pe < b) {
+                        const int16_t tail_base = qv[pe];
+                        for (int vi = pe + 1; vi < b; vi++) {
+                            int d = (int)qv[vi] - (int)tail_base;
+                            if (d < -128 || d > 127) { split_valid = false; break; }
+                        }
+                    }
+
+                    if (split_valid) {
+                        if (ps > a) processed.push_back({ 1, a, ps });
+                        processed.push_back({ 2, ps, pe });
+                        if (pe < b) processed.push_back({ 1, pe, b });
+                        continue;
+                    }
                 }
             }
         }
@@ -1608,7 +1580,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                 std::vector<int16_t> c;
                 float err;
                 FitPoly(qv.data() + ms, mN, deg, c, err);
-                if (err < 0.5f) {
+                if (err < g_AnimCompressError) {
                     const int poly_sz = BlockByteCost((uint8_t)(2 + deg), mN);
                     if (poly_sz < merge_cost) {
                         best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
@@ -1634,7 +1606,7 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                     std::vector<int16_t> c;
                     float err;
                     FitPoly(qv.data() + rb.start, N, deg, c, err);
-                    if (err < 1.0f) {
+                    if (err < g_AnimCompressError) {
                         const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
                         if (poly_sz < cur_cost) {
                             best_t = (uint8_t)(2 + deg); coeffs = std::move(c);

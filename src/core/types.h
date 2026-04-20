@@ -315,7 +315,6 @@ namespace temp {
 		int32_t start;
 		int32_t end;
 	};
-
 }
 
 inline void temp::animdesc_t::InitData(const temp::rig_t& rig, bool badditive) {

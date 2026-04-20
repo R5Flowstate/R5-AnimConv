@@ -2,11 +2,11 @@
 #include <pch.h>
 #include "print.h"
 
-bool _enable_verbose = false;
-bool _enable_no_entry = false;
+bool g_EnableVerbose = false;
+bool g_NoEntries = false;
 
 void verbose(const char* format, ...) {
-    if (_enable_verbose) {
+    if (g_EnableVerbose) {
         va_list args;
         va_start(args, format);
         vprintf(format, args);

@@ -1318,6 +1318,8 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
     for (int i = 0; i < total_frames; i++)
         qv[i] = (int16_t)std::round(rawdata[startframe + i][axis] / scale);
 
+    const bool bUseCompression = g_AnimCompressError > 0.0f;
+
     auto emit_block = [&](uint8_t type, int start, int end, const std::vector<int16_t>* pc) {
         const int n = end - start;
         if (n <= 255) {
@@ -1382,20 +1384,22 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                 const int rest_cost = BlockByteCost(0, scan - t1end);
                 const int separate_cost = t1_cost + rest_cost;
 
-                for (int deg = 1; deg <= std::min(5, pN - 1); deg++) {
-                    std::vector<int16_t> c;
-                    float err;
-                    FitPoly(qv.data() + pos, pN, deg, c, err);
-                    if (err < g_AnimCompressError) {
-                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), pN);
-                        if (poly_sz < separate_cost) {
-                            const int idx = (int)blocks.size();
-                            blocks.push_back({ (uint8_t)(2 + deg), pos, scan });
-                            poly_coeffs.push_back({ idx, std::move(c) });
-                            pos = scan;
-                            found_poly = true;
+                if (bUseCompression) {
+                    for (int deg = 1; deg <= std::min(5, pN - 1); deg++) {
+                        std::vector<int16_t> c;
+                        float err;
+                        FitPoly(qv.data() + pos, pN, deg, c, err);
+                        if (err < g_AnimCompressError) {
+                            const int poly_sz = BlockByteCost((uint8_t)(2 + deg), pN);
+                            if (poly_sz < separate_cost) {
+                                const int idx = (int)blocks.size();
+                                blocks.push_back({ (uint8_t)(2 + deg), pos, scan });
+                                poly_coeffs.push_back({ idx, std::move(c) });
+                                pos = scan;
+                                found_poly = true;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -1404,20 +1408,22 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             {
                 const int t1N = t1end - pos;
                 const int t1_cost = BlockByteCost(1, t1N);
-                for (int deg = 1; deg <= std::min(5, t1N - 1); deg++) {
-                    std::vector<int16_t> c;
-                    float err;
-                    FitPoly(qv.data() + pos, t1N, deg, c, err);
-                    if (err < g_AnimCompressError) {
-                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), t1N);
-                        if (poly_sz < t1_cost) {
-                            const int idx = (int)blocks.size();
-                            blocks.push_back({ (uint8_t)(2 + deg), pos, t1end });
-                            poly_coeffs.push_back({ idx, std::move(c) });
-                            pos = t1end;
-                            found_poly = true;
+                if (bUseCompression) {
+                    for (int deg = 1; deg <= std::min(5, t1N - 1); deg++) {
+                        std::vector<int16_t> c;
+                        float err;
+                        FitPoly(qv.data() + pos, t1N, deg, c, err);
+                        if (err < g_AnimCompressError) {
+                            const int poly_sz = BlockByteCost((uint8_t)(2 + deg), t1N);
+                            if (poly_sz < t1_cost) {
+                                const int idx = (int)blocks.size();
+                                blocks.push_back({ (uint8_t)(2 + deg), pos, t1end });
+                                poly_coeffs.push_back({ idx, std::move(c) });
+                                pos = t1end;
+                                found_poly = true;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -1443,20 +1449,22 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
         if (rN > 2) {
             bool found_poly = false;
             const int raw_cost = BlockByteCost(0, rN);
-            for (int deg = 1; deg <= std::min(5, rN - 1); deg++) {
-                std::vector<int16_t> c;
-                float err;
-                FitPoly(qv.data() + pos, rN, deg, c, err);
-                if (err < g_AnimCompressError) {
-                    const int poly_sz = BlockByteCost((uint8_t)(2 + deg), rN);
-                    if (poly_sz < raw_cost) {
-                        const int idx = (int)blocks.size();
-                        blocks.push_back({ (uint8_t)(2 + deg), pos, rend });
-                        poly_coeffs.push_back({ idx, std::move(c) });
-                        pos = rend;
-                        found_poly = true;
+            if (g_AnimCompressError > 0.0f) {
+                for (int deg = 1; deg <= std::min(5, rN - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(qv.data() + pos, rN, deg, c, err);
+                    if (err < g_AnimCompressError) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), rN);
+                        if (poly_sz < raw_cost) {
+                            const int idx = (int)blocks.size();
+                            blocks.push_back({ (uint8_t)(2 + deg), pos, rend });
+                            poly_coeffs.push_back({ idx, std::move(c) });
+                            pos = rend;
+                            found_poly = true;
+                        }
+                        break;
                     }
-                    break;
                 }
             }
             if (found_poly) continue;
@@ -1576,16 +1584,18 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
 
             uint8_t best_t = 0;
             coeffs.clear();
-            for (int deg = 1; deg <= std::min(5, mN - 1); deg++) {
-                std::vector<int16_t> c;
-                float err;
-                FitPoly(qv.data() + ms, mN, deg, c, err);
-                if (err < g_AnimCompressError) {
-                    const int poly_sz = BlockByteCost((uint8_t)(2 + deg), mN);
-                    if (poly_sz < merge_cost) {
-                        best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+            if (g_AnimCompressError > 0.0f) {
+                for (int deg = 1; deg <= std::min(5, mN - 1); deg++) {
+                    std::vector<int16_t> c;
+                    float err;
+                    FitPoly(qv.data() + ms, mN, deg, c, err);
+                    if (err < g_AnimCompressError) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), mN);
+                        if (poly_sz < merge_cost) {
+                            best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
             if (best_t != 0) {
@@ -1602,16 +1612,18 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                 int cur_cost = BlockByteCost(rb.type, N);
                 uint8_t best_t = 0;
                 coeffs.clear();
-                for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
-                    std::vector<int16_t> c;
-                    float err;
-                    FitPoly(qv.data() + rb.start, N, deg, c, err);
-                    if (err < g_AnimCompressError) {
-                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
-                        if (poly_sz < cur_cost) {
-                            best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                if (bUseCompression) {
+                    for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
+                        std::vector<int16_t> c;
+                        float err;
+                        FitPoly(qv.data() + rb.start, N, deg, c, err);
+                        if (err < g_AnimCompressError) {
+                            const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
+                            if (poly_sz < cur_cost) {
+                                best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
                 if (best_t != 0) {

@@ -1,5 +1,10 @@
 #include <pch.h>
 
+bool g_EnableVerbose = false;
+bool g_NoEntries = false;
+bool g_SkipEvents = false;
+bool g_NoPause = false;
+
 void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, std::vector<temp::rig_t>& rrig) {
 	if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
 		std::cerr << "[!] Error: directory does not exist.\n";

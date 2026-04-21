@@ -16,7 +16,6 @@ Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne]
 
 >**Options**
 >* `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
->* `-o <out_season>` : Output assets season (default: 3)
 >* `-verbose`    : Verbose outputs
 >* `-ne`         : No RePak Entries outputs
 >* `-skipevents` : Skip any events that might crash if lag of asset

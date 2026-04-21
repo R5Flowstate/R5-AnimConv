@@ -2,9 +2,6 @@
 #include <pch.h>
 #include "print.h"
 
-bool g_EnableVerbose = false;
-bool g_NoEntries = false;
-
 void verbose(const char* format, ...) {
     if (g_EnableVerbose) {
         va_list args;
@@ -14,7 +11,6 @@ void verbose(const char* format, ...) {
     }
 }
 
-// Progress bar class
 ProgressBar::ProgressBar(size_t total) : total(total) {}
 
 void ProgressBar::Add(size_t val) {

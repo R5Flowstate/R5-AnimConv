@@ -7,7 +7,7 @@
 #include <utils/misc.h>
 #include <core/cli.h>
 
-static int RunRseqMode(const std::string& input_path, const std::string& in_season, const std::string& out_season, bool bSkipEvents, bool bNoPause) {
+static int RunRseqMode(const std::string& input_path, const std::string& in_season) {
 	auto parser = Parsers.find(in_season);
 	if (parser == Parsers.end()) {
 		printf("[!] Error: Unsupported assets version.\n");
@@ -86,19 +86,13 @@ static int RunRseqMode(const std::string& input_path, const std::string& in_seas
 		}
 
 		printf("Writing rseqs for %s\n", rig.name.c_str());
-		if (out_season == "3") {
-			WriteRSEQ_v7(rig, bSkipEvents);
-		}
-		else {
-			printf("[!] Error: Only rseq v7 is supported now\n");
-			return 1;
-		}
+		WriteRSEQ_v7(rig, g_SkipEvents);
 	}
 
 	/* PRINT REPAK ENTRIES */
 	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
 	for (auto& rig : rigs)  PrintRepakEntries(rig);
-	verbose("[+] Succeeded!\n"); 
+	verbose("[+] Succeeded!\n");
 
 #ifdef _DEBUG
 	printf("Animation Data Compressed Types:\n");
@@ -107,11 +101,11 @@ static int RunRseqMode(const std::string& input_path, const std::string& in_seas
 	}
 #endif // _DEBUG
 
-	if (!bNoPause) system("pause");
+	if (!g_NoPause) system("pause");
 	return 0;
 }
 
-static int RunMdlMode(const std::string& input_mdl, const std::string& override_rrig_path, const std::string& override_rseq_path, bool bNoPause) {
+static int RunMdlMode(const std::string& input_mdl, const std::string& override_rrig_path, const std::string& override_rseq_path) {
 	std::ifstream mdl_stream(input_mdl, std::ios::binary);
 	std::filesystem::path file_path = std::filesystem::absolute(input_mdl);
 	std::string output_dir = file_path.parent_path().string();
@@ -163,7 +157,7 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
 	PrintRepakEntries(rig);
 	verbose("[+] Succeeded!\n");
-	if (!bNoPause) system("pause");
+	if (!g_NoPause) system("pause");
 	return 0;
 }
 
@@ -172,16 +166,12 @@ int main(int argc, char* argv[]) {
 	std::string override_rseq_path;
 	std::string override_rrig_path;
 	std::string in_season = "28";
-	std::string out_season = "3";
-	bool bSkipEvents = false;
-	bool bNoPause = false;
 
 	std::string usage = "Usage: \n" \
 		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]\n" \
 		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]\n";
 
 	// `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
-	// `-o <out_season>` : Output assets season, only season 3 available for now (default: 3)
 	// `-verbose`    : Verbose outputs
 	// `-ne`         : No RePak Entries outputs
 	// `-skipevents` : Skip any events that might crash if lag of asset
@@ -200,11 +190,10 @@ int main(int argc, char* argv[]) {
 	for (int i = 2; i < argc; ++i) {
 		std::string arg = argv[i];
 		ARG_VAL("-i", in_season, "[!] Error: -i requires input assets season.\n");
-		ARG_VAL("-o", out_season, "[!] Error: -o requires output assets season.\n");
 		ARG_BOOL("-verbose", g_EnableVerbose);
 		ARG_BOOL("-ne", g_NoEntries);
-		ARG_BOOL("-skipevents", bSkipEvents);
-		ARG_BOOL("-nopause", bNoPause);
+		ARG_BOOL("-skipevents", g_SkipEvents);
+		ARG_BOOL("-nopause", g_NoPause);
 		ARG_FLT("-comperr", g_AnimCompressError, "[!] Error: -comperr requires a number.\n");
 		ARG_VAL("-rp", override_rrig_path, "[!] Error: -rp requires a path argument.\n");
 		ARG_VAL("-sp", override_rseq_path, "[!] Error: -sp requires a path argument.\n");
@@ -220,9 +209,9 @@ int main(int argc, char* argv[]) {
 
 	// MDL mode: input is a .mdl file
 	if (std::filesystem::is_regular_file(input_mdl) && (std::filesystem::path(input_mdl).extension() == ".mdl")) {
-		return RunMdlMode(input_mdl, override_rrig_path, override_rseq_path, bNoPause);
+		return RunMdlMode(input_mdl, override_rrig_path, override_rseq_path);
 	}
 
-	// RSEQ mode: input is a directory (or a non-mdl file whose parent dir is used)
-	return RunRseqMode(input_mdl, in_season, out_season, bSkipEvents, bNoPause);
+	// RSEQ mode: input is a directory that contains animrig/ and animseq/
+	return RunRseqMode(input_mdl, in_season);
 }

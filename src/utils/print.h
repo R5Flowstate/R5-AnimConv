@@ -1,7 +1,5 @@
 #pragma once
 
-extern bool g_EnableVerbose;
-extern bool g_NoEntries;
 void verbose(const char* format, ...);
 
 class ProgressBar {

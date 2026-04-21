@@ -68,23 +68,6 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 	// hitboxsets
 	rig.hitboxsets.resize(1);
 	rig.hitboxsets[0].name = "default";
-	/*rig.hitboxsets.resize(pMdlHdr->numhitboxsets);
-	auto* pHitboxsets = PTR_FROM_IDX(p2::mstudiohitboxset_t, buffer, pMdlHdr->hitboxsetindex);
-	for (int i = 0; i < pMdlHdr->numhitboxsets; i++) {
-		rig.hitboxsets[i].name = STRING_FROM_IDX(&pHitboxsets[i], pHitboxsets[i].sznameindex);
-		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
-			auto* pHitbox = PTR_FROM_IDX(p2::mstudiobbox_t, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
-			temp::bbox_t hitbox{};
-			hitbox.name = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].szhitboxnameindex);
-			hitbox.hitdataGroupOffset = STRING_FROM_IDX(&pHitbox[j], pHitbox[j].szhitboxnameindex);
-			hitbox.bone = pHitbox[j].bone;
-			hitbox.group = pHitbox[j].group;
-			hitbox.bbmin = pHitbox[j].bbmin;
-			hitbox.bbmax = pHitbox[j].bbmax;
-			//hitbox.critShotOverride = pHitbox[j].critShotOverride;
-			rig.hitboxsets[i].hitboxes.push_back(hitbox);
-		}
-	}*/
 
 	// nodes
 	int* pNodenames = reinterpret_cast<int*>(buffer + pMdlHdr->localnodenameindex);

@@ -634,8 +634,7 @@ void r5::DP::ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlen
 
 template<typename TAnimDesc>
 void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::Sequence& seq, temp::animdesc_t& anim) {
-    if (anim.asqd.buffer.empty())
-        PRINTANDTHROW(anim.asqd.path.c_str(), "[!] Error: DataPoint buffer is null.");
+    AssertMsg(!anim.asqd.buffer.empty(), "DataPoint buffer is null for '%s'", anim.asqd.path.c_str());
 
     constexpr bool isV121 = std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>;
 
@@ -659,13 +658,11 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
                 const int32_t idx = animsections[section - 1];
                 if (idx < 0) {
                     const int32_t off = -1 - idx;
-                    if (seq.extn.buffer.empty() || (size_t)off >= seq.extn.size)
-                        PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: DP section past end of .rseq_extn");
+                    AssertMsg(!seq.extn.buffer.empty() && (size_t)off < seq.extn.size, "DP section past end of .rseq_extn '%s'", seq.extn.path.c_str());
                     pBoneFlagArray = seq.extn.buffer.data() + off;
                 }
                 else {
-                    if ((size_t)idx >= anim.asqd.buffer.size())
-                        PRINTANDTHROW(anim.asqd.path.c_str(), "[!] Error: DP section past end of .asqd");
+                    AssertMsg((size_t)idx < anim.asqd.buffer.size(), "DP section past end of .asqd '%s'", anim.asqd.path.c_str());
                     pBoneFlagArray = anim.asqd.buffer.data() + idx;
                 }
             }
@@ -677,13 +674,11 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
                 const int32_t idx = animsections[section];
                 if (idx < 0) {
                     const int32_t offset = -1 - idx;
-                    if (seq.extn.buffer.empty() || (size_t)offset >= seq.extn.size)
-                        PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: DP section past end of .rseq_extn");
+                    AssertMsg(!seq.extn.buffer.empty() && (size_t)offset < seq.extn.size, "DP section past end of .rseq_extn '%s'", seq.extn.path.c_str());
                     pBoneFlagArray = seq.extn.buffer.data() + offset;
                 }
                 else {
-                    if ((size_t)idx >= anim.asqd.buffer.size())
-                        PRINTANDTHROW(seq.path.c_str(), "[!] Error: DP section past end of .rseq");
+                    AssertMsg((size_t)idx < anim.asqd.buffer.size(), "DP section past end of .rseq '%s'", seq.path.c_str());
                     pBoneFlagArray = PTR_FROM_IDX(char, pAnimDesc, idx);
                 }
             }
@@ -1002,7 +997,7 @@ template void ParseActMod<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121
 
 template<typename TAnimDesc>
 void RLE::ParseIkrules(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
-    if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
+    AssertMsg(pAnimDesc, "pAnimDesc is null for '%s'", anim.name.c_str());
     if (!pAnimDesc->numikrules) return;
 
     if constexpr (
@@ -1123,7 +1118,7 @@ template void RLE::ParseIkrules<r5::anim::v121::mstudioanimdesc_t>(const r5::ani
 
 template<typename TAnimDesc>
 void RLE::ParseFrameMovements(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
-    if (!pAnimDesc) PRINTANDTHROW(anim.name.c_str(), "pAnimDesc is null");
+    AssertMsg(pAnimDesc, "pAnimDesc is null for '%s'", anim.name.c_str());
     if (!(pAnimDesc->flags & r5::ANIM_FRAMEMOVEMENT) || !pAnimDesc->framemovementindex) return;
 
     if constexpr (
@@ -1199,8 +1194,9 @@ template void RLE::ParseFrameMovements<r5::anim::v121::mstudioanimdesc_t>(const 
 //  Write helpers
 // ============================================================================
 
-static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& coeffs_out, float& max_err_out) {
+static void FitPoly(const int16_t* vals, int N, int deg, int16_t* coeffs_out, int& ncoeffs_out, float& max_err_out) {
     const int nc = deg + 1;
+    ncoeffs_out = nc;
     double ATA[36] = {}, ATb[6] = {};
     for (int f = 0; f < N; f++) {
         const double t = (N > 1) ? (double)f / (N - 1) : 0.0;
@@ -1236,7 +1232,6 @@ static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& c
         for (int c = r + 1; c < nc; c++) v -= aug[r * (nc + 1) + c] * x[c];
         x[r] = (std::abs(aug[r * (nc + 1) + r]) > 1e-12) ? v / aug[r * (nc + 1) + r] : 0.0;
     }
-    coeffs_out.resize(nc);
     for (int i = 0; i < nc; i++) coeffs_out[i] = (int16_t)std::round(x[i]);
 
     max_err_out = 0.0f;
@@ -1248,48 +1243,43 @@ static void FitPoly(const int16_t* vals, int N, int deg, std::vector<int16_t>& c
     }
 }
 
-template<typename TVecType>
-void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, temp::animblock_t c, int axis, float scale, const std::vector<int16_t>* poly_coeffs) { 
-    const int N = (int)(c.end - c.start);
+void WriteCompressedAnim(char*& pData, uint8_t type, int N, const int16_t* qv_block, const int16_t* poly_coeffs, int ncoeffs) {
+    Assert(N > 0 && N <= 255);
 
-    comptypes[c.type]++; // store statistics
+    comptypes[type]++; // store statistics
 
     auto* hdr = reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData);
     pData += 2;
-    hdr->meta.type = c.type;
+    hdr->meta.type = type;
     hdr->meta.total = (uint8_t)N;
 
-    switch (c.type) {
+    switch (type) {
     case 0: {
         for (int i = 0; i < N; i++) {
-            reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = (int16_t)std::round(rawdata[c.start + i][axis] / scale);
+            reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = qv_block[i];
             pData += 2;
         }
         break;
     }
     case 1: {
-        const int16_t base = (int16_t)std::round(rawdata[c.start][axis] / scale);
+        const int16_t base = qv_block[0];
         reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = base;
         pData += 2;
         for (int i = 1; i < N; i++) {
-            const int16_t v = (int16_t)std::round(rawdata[c.start + i][axis] / scale);
-            *reinterpret_cast<int8_t*>(pData) = (int8_t)(v - base);
+            *reinterpret_cast<int8_t*>(pData) = (int8_t)std::clamp((int)qv_block[i] - (int)base, -128, 127);
             pData += 1;
         }
         break;
     }
     case 2: {
-        const int16_t base = (int16_t)std::round(rawdata[c.start][axis] / scale);
-        reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = base;
+        reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = qv_block[0];
         pData += 2;
         break;
     }
     default: {
-        if (poly_coeffs && !poly_coeffs->empty()) {
-            for (int16_t coeff : *poly_coeffs) {
-                reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = coeff;
-                pData += 2;
-            }
+        for (int i = 0; i < ncoeffs; i++) {
+            reinterpret_cast<r5::anim::mstudioanimvalue_t*>(pData)->value = poly_coeffs[i];
+            pData += 2;
         }
         break;
     }
@@ -1297,8 +1287,6 @@ void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, tem
     
     ALIGN2(pData);
 }
-template void WriteCompressedAnim<Vector3>(char*&, const std::vector<Vector3>&, temp::animblock_t, int, float, const std::vector<int16_t>*);
-template void WriteCompressedAnim<Vector4>(char*&, const std::vector<Vector4>&, temp::animblock_t, int, float, const std::vector<int16_t>*);
 
 static int BlockByteCost(uint8_t type, int N) {
     switch (type) {
@@ -1320,24 +1308,21 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
 
     const bool bUseCompression = g_AnimCompressError > 0.0f;
 
-    auto emit_block = [&](uint8_t type, int start, int end, const std::vector<int16_t>* pc) {
-        const int n = end - start;
+    auto emit_block = [&](const temp::animblock_t& blk) {
+        const int n = blk.end - blk.start;
         if (n <= 255) {
-            temp::animblock_t ab{ type, (uint32_t)(startframe + start), (uint32_t)(startframe + end) };
-            WriteCompressedAnim(pData, rawdata, ab, axis, scale, pc);
+            WriteCompressedAnim(pData, blk.type, n, qv.data() + blk.start, blk.coeffs, blk.ncoeffs);
         } else {
-            const uint8_t chunk_type = (type == 1 || type >= 3) ? (uint8_t)0 : type;
+            const uint8_t chunk_type = (blk.type == 1 || blk.type >= 3) ? (uint8_t)0 : blk.type;
             for (int off = 0; off < n; ) {
                 const int chunk = std::min(255, n - off);
-                temp::animblock_t ab{ chunk_type, (uint32_t)(startframe + start + off), (uint32_t)(startframe + start + off + chunk) };
-                WriteCompressedAnim(pData, rawdata, ab, axis, scale, nullptr);
+                WriteCompressedAnim(pData, chunk_type, chunk, qv.data() + blk.start + off, nullptr, 0);
                 off += chunk;
             }
         }
         };
 
     std::vector<temp::animblock_t> blocks;
-    std::vector<std::pair<int, std::vector<int16_t>>> poly_coeffs;
     blocks.reserve(64);
 
     int pos = 0;
@@ -1386,15 +1371,15 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
 
                 if (bUseCompression) {
                     for (int deg = 1; deg <= std::min(5, pN - 1); deg++) {
-                        std::vector<int16_t> c;
-                        float err;
-                        FitPoly(qv.data() + pos, pN, deg, c, err);
+                        int16_t c[6]; int nc; float err;
+                        FitPoly(qv.data() + pos, pN, deg, c, nc, err);
                         if (err < g_AnimCompressError) {
                             const int poly_sz = BlockByteCost((uint8_t)(2 + deg), pN);
                             if (poly_sz < separate_cost) {
-                                const int idx = (int)blocks.size();
-                                blocks.push_back({ (uint8_t)(2 + deg), pos, scan });
-                                poly_coeffs.push_back({ idx, std::move(c) });
+                                temp::animblock_t ab{ (uint8_t)(2 + deg), pos, scan };
+                                memcpy(ab.coeffs, c, nc * sizeof(int16_t));
+                                ab.ncoeffs = (uint8_t)nc;
+                                blocks.push_back(ab);
                                 pos = scan;
                                 found_poly = true;
                             }
@@ -1410,15 +1395,15 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
                 const int t1_cost = BlockByteCost(1, t1N);
                 if (bUseCompression) {
                     for (int deg = 1; deg <= std::min(5, t1N - 1); deg++) {
-                        std::vector<int16_t> c;
-                        float err;
-                        FitPoly(qv.data() + pos, t1N, deg, c, err);
+                        int16_t c[6]; int nc; float err;
+                        FitPoly(qv.data() + pos, t1N, deg, c, nc, err);
                         if (err < g_AnimCompressError) {
                             const int poly_sz = BlockByteCost((uint8_t)(2 + deg), t1N);
                             if (poly_sz < t1_cost) {
-                                const int idx = (int)blocks.size();
-                                blocks.push_back({ (uint8_t)(2 + deg), pos, t1end });
-                                poly_coeffs.push_back({ idx, std::move(c) });
+                                temp::animblock_t ab{ (uint8_t)(2 + deg), pos, t1end };
+                                memcpy(ab.coeffs, c, nc * sizeof(int16_t));
+                                ab.ncoeffs = (uint8_t)nc;
+                                blocks.push_back(ab);
                                 pos = t1end;
                                 found_poly = true;
                             }
@@ -1449,17 +1434,17 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
         if (rN > 2) {
             bool found_poly = false;
             const int raw_cost = BlockByteCost(0, rN);
-            if (g_AnimCompressError > 0.0f) {
+            if (bUseCompression) {
                 for (int deg = 1; deg <= std::min(5, rN - 1); deg++) {
-                    std::vector<int16_t> c;
-                    float err;
-                    FitPoly(qv.data() + pos, rN, deg, c, err);
+                    int16_t c[6]; int nc; float err;
+                    FitPoly(qv.data() + pos, rN, deg, c, nc, err);
                     if (err < g_AnimCompressError) {
                         const int poly_sz = BlockByteCost((uint8_t)(2 + deg), rN);
                         if (poly_sz < raw_cost) {
-                            const int idx = (int)blocks.size();
-                            blocks.push_back({ (uint8_t)(2 + deg), pos, rend });
-                            poly_coeffs.push_back({ idx, std::move(c) });
+                            temp::animblock_t ab{ (uint8_t)(2 + deg), pos, rend };
+                            memcpy(ab.coeffs, c, nc * sizeof(int16_t));
+                            ab.ncoeffs = (uint8_t)nc;
+                            blocks.push_back(ab);
                             pos = rend;
                             found_poly = true;
                         }
@@ -1540,30 +1525,13 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             processed.push_back(rb);
     }
 
-    std::unordered_map<int, std::vector<int16_t>*> poly_map;
-    for (auto& [idx, c] : poly_coeffs) poly_map[idx] = &c;
-
-    std::vector<int16_t> coeffs;
     const int nblocks = (int)processed.size();
     int bi = 0;
     while (bi < nblocks) {
         auto& blk = processed[bi];
 
-        if (blk.type >= 3) {
-            std::vector<int16_t>* pc = nullptr;
-            for (auto& [idx, c] : poly_coeffs) {
-                if (blocks[idx].start == blk.start && blocks[idx].end == blk.end && blocks[idx].type == blk.type) {
-                    pc = &c;
-                    break;
-                }
-            }
-            emit_block(blk.type, blk.start, blk.end, pc);
-            bi++;
-            continue;
-        }
-
-        if (blk.type == 2) {
-            emit_block(2, blk.start, blk.end, nullptr);
+        if (blk.type >= 3 || blk.type == 2) {
+            emit_block(blk);
             bi++;
             continue;
         }
@@ -1582,65 +1550,61 @@ void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t 
             for (int j = bi; j < merge_end; j++)
                 merge_cost += BlockByteCost(processed[j].type, processed[j].end - processed[j].start);
 
-            uint8_t best_t = 0;
-            coeffs.clear();
-            if (g_AnimCompressError > 0.0f) {
+            if (bUseCompression) {
                 for (int deg = 1; deg <= std::min(5, mN - 1); deg++) {
-                    std::vector<int16_t> c;
-                    float err;
-                    FitPoly(qv.data() + ms, mN, deg, c, err);
+                    int16_t c[6]; int nc; float err;
+                    FitPoly(qv.data() + ms, mN, deg, c, nc, err);
                     if (err < g_AnimCompressError) {
                         const int poly_sz = BlockByteCost((uint8_t)(2 + deg), mN);
                         if (poly_sz < merge_cost) {
-                            best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
+                            temp::animblock_t ab{ (uint8_t)(2 + deg), ms, me };
+                            memcpy(ab.coeffs, c, nc * sizeof(int16_t));
+                            ab.ncoeffs = (uint8_t)nc;
+                            emit_block(ab);
+                            bi = merge_end;
+                            goto next_block;
                         }
                         break;
                     }
                 }
-            }
-            if (best_t != 0) {
-                emit_block(best_t, ms, me, &coeffs);
-                bi = merge_end;
-                continue;
             }
         }
 
         for (int j = bi; j < merge_end; j++) {
             auto& rb = processed[j];
             const int N = rb.end - rb.start;
-            if (N > 2 && rb.type < 3) {
+            if (N > 2 && rb.type < 3 && bUseCompression) {
                 int cur_cost = BlockByteCost(rb.type, N);
-                uint8_t best_t = 0;
-                coeffs.clear();
-                if (bUseCompression) {
-                    for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
-                        std::vector<int16_t> c;
-                        float err;
-                        FitPoly(qv.data() + rb.start, N, deg, c, err);
-                        if (err < g_AnimCompressError) {
-                            const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
-                            if (poly_sz < cur_cost) {
-                                best_t = (uint8_t)(2 + deg); coeffs = std::move(c);
-                            }
-                            break;
+                for (int deg = 1; deg <= std::min(5, N - 1); deg++) {
+                    int16_t c[6]; int nc; float err;
+                    FitPoly(qv.data() + rb.start, N, deg, c, nc, err);
+                    if (err < g_AnimCompressError) {
+                        const int poly_sz = BlockByteCost((uint8_t)(2 + deg), N);
+                        if (poly_sz < cur_cost) {
+                            temp::animblock_t ab{ (uint8_t)(2 + deg), rb.start, rb.end };
+                            memcpy(ab.coeffs, c, nc * sizeof(int16_t));
+                            ab.ncoeffs = (uint8_t)nc;
+                            emit_block(ab);
+                            goto next_inner;
                         }
+                        break;
                     }
                 }
-                if (best_t != 0) {
-                    emit_block(best_t, rb.start, rb.end, &coeffs);
-                    continue;
-                }
             }
-            emit_block(rb.type, rb.start, rb.end, nullptr);
+            emit_block(rb);
+            next_inner:;
         }
         bi = merge_end;
+        next_block:;
     }
 }
 template void WriteAnimData<Vector3>(char*&, const std::vector<Vector3>&, const uint32_t, const uint32_t, int, float);
 template void WriteAnimData<Vector4>(char*&, const std::vector<Vector4>&, const uint32_t, const uint32_t, int, float);
 
-void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, std::vector<Vector3> rawdata, int32_t startframe, int32_t endframe, float scale) {
-    animvalueptr->offset = pData - (char*)animvalueptr;
+void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, const std::vector<Vector3>& rawdata, int32_t startframe, int32_t endframe, float scale) {
+    const ptrdiff_t off = pData - (char*)animvalueptr;
+    AssertMsg(off >= 0 && off < 8192, "animvalue_ptr offset overflow: %td (13-bit max)", off);
+    animvalueptr->offset = (uint16_t)off;
 
     uint8_t  tmp = 0;
     uint8_t* offsets[] = { &tmp, &animvalueptr->idx1, &animvalueptr->idx2 };
@@ -1650,8 +1614,11 @@ void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, std:
         if (allEqualVector(rawdata, startframe, endframe, axis, scale) && (int16_t)std::round(rawdata[startframe][axis] / scale) == 0)
             continue;
 
+        const ptrdiff_t axis_off = (pData - beginaddress) / 2;
+        AssertMsg(axis_off >= 0 && axis_off <= 255, "axis index overflow: %td (8-bit max)", axis_off);
+
         animvalueptr->flags |= (4 >> axis);
-        *offsets[axis] = (uint8_t)((pData - beginaddress) / 2);
+        *offsets[axis] = (uint8_t)axis_off;
         WriteAnimData(pData, rawdata, startframe, endframe, axis, scale);
     }
 }

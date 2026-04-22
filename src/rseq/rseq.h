@@ -98,9 +98,9 @@ void ParseRSEQ_v11 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v12 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig);
 
-void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, std::vector<Vector3> rawdata, int32_t startframe, int32_t endframe, float scale);
+void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, const std::vector<Vector3>& rawdata, int32_t startframe, int32_t endframe, float scale);
 template<typename TVecType> void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t startframe, uint32_t endframe, int axis, float scale);
-template<typename TVecType> void WriteCompressedAnim(char*& pData, const std::vector<TVecType>& rawdata, temp::animblock_t c, int axis, float scale, const std::vector<int16_t>* poly_coeffs = nullptr);
+void WriteCompressedAnim(char*& pData, uint8_t type, int N, const int16_t* qv_block, const int16_t* poly_coeffs, int ncoeffs);
 
 void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents = false);
 

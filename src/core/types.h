@@ -314,6 +314,8 @@ namespace temp {
 		uint8_t type;
 		int32_t start;
 		int32_t end;
+		int16_t coeffs[6] = {};
+		uint8_t ncoeffs = 0;
 	};
 }
 

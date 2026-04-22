@@ -483,17 +483,13 @@ namespace r5 {
 				int16_t unkcount;
 			};
 
-			struct mstudiocompressedikerror_t {
-				int16_t sectionframes;
-				float scale[6];
-			};
-
 			struct mstudioikrule_t {
 				int16_t index;
 				int16_t bone;
 				uint8_t type;
 				uint8_t slot;
-				mstudiocompressedikerror_t compressedikerror;
+				int16_t sectionframes;
+				float scale[6];
 				int32_t compressedikerrorindex;
 				int16_t iStart;
 				int16_t ikerrorindex;

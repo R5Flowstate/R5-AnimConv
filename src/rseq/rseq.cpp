@@ -5,7 +5,7 @@ using namespace r5;
 
 static temp::file_t LoadFile(const std::string& path) {
     if (!std::filesystem::exists(path))
-        PRINTANDTHROW(path.c_str(), "[!] Error: file is missing.");
+        Error("file is missing: '%s'", path.c_str());
 
     temp::file_t f{};
     f.path = path;
@@ -13,10 +13,10 @@ static temp::file_t LoadFile(const std::string& path) {
     f.buffer.resize(f.size);
 
     std::ifstream stream(path, std::ios::binary);
-    if (!stream.is_open()) PRINTANDTHROW(path.c_str(), "[!] Error: cannot open file for reading.");
+    if (!stream.is_open()) Error("cannot open file for reading: '%s'", path.c_str());
     stream.read(f.buffer.data(), f.size);
     if (!stream || stream.gcount() != static_cast<std::streamsize>(f.size))
-        PRINTANDTHROW(path.c_str(), "[!] Error: failed to read entire file.");
+        Error("failed to read entire file: '%s'", path.c_str());
     return f;
 }
 
@@ -80,10 +80,10 @@ static char* ResolveRLESectionBFA(int32_t sectionIdx, char* pAnimDescBase, temp:
     if (sectionIdx < 0) {
         const int32_t off = -1 - sectionIdx;
         seq.extn = LoadFile(seq.path + "_extn");
-        if ((size_t)off >= seq.extn.size) PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: Passed the end of .rseq_extn");
+        if ((size_t)off >= seq.extn.size) Error("passed the end of .rseq_extn '%s'", seq.extn.path.c_str());
         return PTR_FROM_IDX(char, seq.extn.buffer.data(), off);
     }
-    if ((size_t)sectionIdx >= std::filesystem::file_size(seq.path)) PRINTANDTHROW(seq.path.c_str(), "[!] Error: Passed the end of .rseq");
+    if ((size_t)sectionIdx >= std::filesystem::file_size(seq.path)) Error("passed the end of .rseq '%s'", seq.path.c_str());
     return PTR_FROM_IDX(char, pAnimDescBase, sectionIdx);
 }
 
@@ -185,8 +185,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
                     if (pAnimDesc->sectionindex) {
                         if (animsections[section].isExternal) {
                             seq.extn = LoadFile(path + "_extn");
-                            if (animsections[section].animidx >= seq.extn.size)
-                                PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: Passed the end of .rseq_extn");
+                            AssertMsg(animsections[section].animidx < seq.extn.size, "passed the end of .rseq_extn '%s'", seq.extn.path.c_str());
                             pBFA = PTR_FROM_IDX(char, seq.extn.buffer.data(), animsections[section].animidx);
                         }
                         else {
@@ -303,8 +302,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
                     if (pAnimDesc->sectionindex) {
                         if (animsections[section].isExternal) {
                             seq.extn = LoadFile(path + "_extn");
-                            if (animsections[section].animidx >= seq.extn.size)
-                                PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: Passed the end of .rseq_extn");
+                            AssertMsg(animsections[section].animidx < seq.extn.size, "passed the end of .rseq_extn '%s'", seq.extn.path.c_str());
                             pBFA = PTR_FROM_IDX(char, seq.extn.buffer.data(), animsections[section].animidx);
                         }
                         else {
@@ -617,8 +615,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
 
                 if (anim.flags & ANIM_DATAPOINT) {
-                    if (anim.asqd.buffer.empty())
-                        PRINTANDTHROW(seq.name.c_str(), "[!] Error: DataPoint anim has no .asqd buffer.");
+                    AssertMsg(!anim.asqd.buffer.empty(), "DataPoint anim has no .asqd buffer for '%s'", seq.name.c_str());
 
                     r5::DP::ParseDataPoint(pAnimDesc, rig, seq, anim);
                     RLE::ParseIkrules(pAnimDesc, anim);
@@ -643,11 +640,11 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                             if (sectionIdx < 0) {
                                 const int32_t offset = -1 - sectionIdx;
                                 seq.extn = LoadFile(path + "_extn");
-                                if ((size_t)offset >= seq.extn.size) PRINTANDTHROW(seq.extn.path.c_str(), "[!] Error: Passed the end .rseq_extn");
+                                AssertMsg((size_t)offset < seq.extn.size, "passed the end of .rseq_extn '%s'", seq.extn.path.c_str());
                                 pBFA = PTR_FROM_IDX(char, seq.extn.buffer.data(), offset);
                             }
                             else {
-                                if ((size_t)sectionIdx >= anim.asqd.size) PRINTANDTHROW((seq.name + ":" + anim.asqd.path).c_str(), "[!] Error: Passed the end of .asqd");
+                                AssertMsg((size_t)sectionIdx < anim.asqd.size, "passed the end of .asqd '%s:%s'", seq.name.c_str(), anim.asqd.path.c_str());
                                 pBFA = PTR_FROM_IDX(char, anim.asqd.buffer.data(), sectionIdx);
                             }
                         }

@@ -3,7 +3,7 @@
 
 std::unordered_map<std::string, std::vector<std::string>> parse_rson(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
-    if (!file) PRINTANDTHROW(path.c_str(), "Failed to open file.");
+    if (!file) Error("failed to open file: '%s'", path.c_str());
 
     std::string content((std::istreambuf_iterator<char>(file)), {});
     std::unordered_map<std::string, std::vector<std::string>> result;

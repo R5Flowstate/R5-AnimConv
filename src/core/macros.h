@@ -17,15 +17,32 @@
 #define ALIGN4( a )  a = (char *)((__int64)((char *)a + 3) & ~ 3)
 #define ALIGN16( a ) a = (char *)((__int64)((char *)a + 15) & ~ 15)
 
-// ============================================================================
-//  Error Handling
-// ============================================================================
+// Source Engine style error and assertion macros
 
-#define PRINTANDTHROW(at, msg) { \
-	printf("[!] Error at %s\n", at); \
-	printf("--> %s\n", msg); \
-	throw std::runtime_error(msg); \
-}
+#define Error(fmt, ...) \
+	do { \
+		printf("[!] Error (%s:%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+		throw std::runtime_error(fmt); \
+	} while(0)
+
+#define Assert(expr) \
+	do { \
+		if (!(expr)) { \
+			printf("Assertion failed: '%s'\n", #expr); \
+			printf("  %s (%d)\n", __FILE__, __LINE__); \
+			throw std::runtime_error("Assertion failed: " #expr); \
+		} \
+	} while(0)
+
+#define AssertMsg(expr, fmt, ...) \
+	do { \
+		if (!(expr)) { \
+			printf("Assertion failed: '%s'\n", #expr); \
+			printf("  %s (%d)\n", __FILE__, __LINE__); \
+			printf("  " fmt "\n", ##__VA_ARGS__); \
+			throw std::runtime_error("Assertion failed: " #expr); \
+		} \
+	} while(0)
 
 // ============================================================================
 //  Constants

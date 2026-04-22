@@ -171,12 +171,12 @@ int main(int argc, char* argv[]) {
 		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]\n" \
 		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]\n";
 
-	// `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
-	// `-verbose`    : Verbose outputs
-	// `-ne`         : No RePak Entries outputs
-	// `-skipevents` : Skip any events that might crash if lag of asset
-	// `-nopause`    : No pause at the end of execution
-	// `-comperr`    : Acceptable compression error, Recommended 0.5-2.0 (~3-10 % smaller without noticeable visual), 0.0 for lossless (default: 1.0)
+	// `-i <in_season>`           : Input assets season (only: Rseq mode, default: 28)
+	// `-verbose`                 : Verbose outputs
+	// `-ne`                      : No RePak Entries outputs
+	// `-skipevents`              : Skip any events that might crash if lag of asset
+	// `-nopause`                 : No pause at the end of execution
+	// `-comperr`                 : Acceptable compression error, Recommended 0.5-2.0 (~3-10 % smaller without noticeable visual), 0.0 for lossless (default: 1.0)
 	// `-rp <override_rrig_path>` : Override internal rrig path (only: Mdl mode)
 	// `-sp <override_rseq_path>` : Override internal rseq path (only: Mdl mode)
 
@@ -195,8 +195,8 @@ int main(int argc, char* argv[]) {
 		ARG_BOOL("-skipevents", g_SkipEvents);
 		ARG_BOOL("-nopause", g_NoPause);
 		ARG_FLT("-comperr", g_AnimCompressError, "[!] Error: -comperr requires a number.\n");
-		ARG_VAL("-rp", override_rrig_path, "[!] Error: -rp requires a path argument.\n");
-		ARG_VAL("-sp", override_rseq_path, "[!] Error: -sp requires a path argument.\n");
+		ARG_VAL("-rp", override_rrig_path, "[!] Error: -rp requires a path.\n");
+		ARG_VAL("-sp", override_rseq_path, "[!] Error: -sp requires a path.\n");
 
 		printf("Unknown option: %s \n%s", arg.c_str(), usage.c_str());
 		return 1;

@@ -1,28 +1,29 @@
 # R5-AnimConv
 
-**R5-AnimConv** is a tool for converting **Source engine file formats**
-into ReSource Animation file formats.
+**R5-AnimConv** is a tool for converting **Source engine file formats** into ReSource Animation file formats.
 
 ---
 
 ### Usage
 
-```bash
-Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]
-```
-```bash
-Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]
+
+``` bash
+# MDL mode
+R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-nopause] [-comperr <error>]
+
+# RSEQ mode
+R5-AnimConv.exe <parent_directory> [-i <in_season>] [-verbose] [-ne] [-skipevents] [-nopause] [-comperr <error>]
 ```
 
->**Options**
->* `-i <in_season>`  : Input assets season (only: Rseq mode, default: 28)
->* `-verbose`    : Verbose outputs
->* `-ne`         : No RePak Entries outputs
->* `-skipevents` : Skip any events that might crash if lag of asset
->* `-nopause`    : No pause at the end of execution
->* `-comperr`    : Acceptable compression error, Recommended 0.5-2.0 (~3-10% smaller without noticeable visual) (default: 1.0)
->* `-rp <override_rrig_path>` : Override internal rrig path (only: Mdl mode)
->* `-sp <override_rseq_path>` : Override internal rseq path (only: Mdl mode)
+>**Options:**
+>- `-i <season>` — Input assets season (RSEQ mode only, range: 7–28, default: 28)
+>- `-verbose` — Enable verbose output
+>- `-ne` — Suppress RePak entries output
+>- `-skipevents` — Skip events that may cause crashes
+>- `-nopause` — No pause at execution end
+>- `-comperr <float>` — Compression error threshold (0.5–2.0 recommended, 0.0 lossless, default: 1.0)
+>- `-rp <path>` — Override internal rrig path (MDL mode only)
+>- `-sp <path>` — Override internal rseq path (MDL mode only)
 
 ---
 

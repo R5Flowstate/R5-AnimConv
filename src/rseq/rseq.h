@@ -102,7 +102,7 @@ void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, cons
 template<typename TVecType> void WriteAnimData(char*& pData, const std::vector<TVecType>& rawdata, uint32_t startframe, uint32_t endframe, int axis, float scale);
 void WriteCompressedAnim(char*& pData, uint8_t type, int N, const int16_t* qv_block, const int16_t* poly_coeffs, int ncoeffs);
 
-void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents = false);
+void WriteRSEQ_v7(temp::rig_t& rig);
 
 extern std::vector<unsigned char> comptypes;
 extern float g_AnimCompressError;

@@ -674,7 +674,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
 //  WriteRSEQ_v7
 // ============================================================================
 
-void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
+void WriteRSEQ_v7(temp::rig_t& rig) {
     ProgressBar bar(rig.sequences.size());
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
@@ -742,7 +742,7 @@ void WriteRSEQ_v7(temp::rig_t& rig, bool bSkipEvents) {
                 pData += sizeof(float) * pkcount;
             }
 
-            if (bSkipEvents) {
+            if (g_SkipEvents) {
                 auto& evts = seq.events;
                 evts.erase(std::remove_if(evts.begin(), evts.end(), [](const temp::seqevent_t& e) {
                     return e.name == "AE_CL_CREATE_PROP"              ||

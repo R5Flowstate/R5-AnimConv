@@ -17,8 +17,6 @@
 #define ALIGN4( a )  a = (char *)((__int64)((char *)a + 3) & ~ 3)
 #define ALIGN16( a ) a = (char *)((__int64)((char *)a + 15) & ~ 15)
 
-// Source Engine style error and assertion macros
-
 #define Error(fmt, ...) \
 	do { \
 		printf("[!] Error (%s:%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \

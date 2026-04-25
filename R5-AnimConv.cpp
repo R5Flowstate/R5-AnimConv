@@ -7,9 +7,13 @@
 #include <utils/misc.h>
 #include <core/cli.h>
 
-static int RunRseqMode(const std::string& input_path, const std::string& in_season) {
-	auto parser = Parsers.find(in_season);
-	if (parser == Parsers.end()) {
+std::string g_in_season = "28";
+std::string g_out_season = "3";
+
+static int RunRseqMode(const std::string& input_path) {
+	auto parser = Parsers.find(g_in_season);
+	auto writer = Writers.find(g_out_season);
+	if (parser == Parsers.end() || writer == Writers.end()) {
 		printf("[!] Error: Unsupported assets version.\n");
 		return 1;
 	}
@@ -37,57 +41,58 @@ static int RunRseqMode(const std::string& input_path, const std::string& in_seas
 		return 1;
 	}
 
-	/* PARSE */
 	for (auto& rig : rigs) {
-		if (rig.rsonpath.empty()) {
-			printf("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
-			continue;
-		}
-
-		/* PARSE RRIG */ {
-			verbose("\nParsing rrig %s...\n", rig.rrigpath.c_str());
-			uint32_t rigFileSize = (uint32_t)std::filesystem::file_size(rig.rrigpath);
-			std::ifstream rrig_stream(rig.rrigpath, std::ios::binary);
-			rrig_stream.seekg(0, std::ios::beg);
-			std::vector<char> buffer(rigFileSize);
-			rrig_stream.read(buffer.data(), rigFileSize);
-			rrig_stream.close();
-
-			parser->second.rrig(buffer.data(), rig);
-			std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
-
-			if (rig.rseqpaths.empty()) {
-				printf("[!] Warning: No .rseq paths found in .rson for %s\n", rig.name.c_str());
+		/* PARSE */
+		{
+			if (rig.rsonpath.empty()) {
+				printf("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
 				continue;
 			}
-		}
-		rig.sequences.reserve(rig.rseqpaths.size());
 
-		/* PARSE RSEQ */ {
-			printf("Parsing Sequences for %s\n", rig.name.c_str());
-			parser->second.rseq(in_dir, rig);
+			/* PARSE RRIG */ {
+				uint32_t rigFileSize = (uint32_t)std::filesystem::file_size(rig.rrigpath);
+				std::ifstream rrig_stream(rig.rrigpath, std::ios::binary);
+				rrig_stream.seekg(0, std::ios::beg);
+				std::vector<char> buffer(rigFileSize);
+				rrig_stream.read(buffer.data(), rigFileSize);
+				rrig_stream.close();
+
+				parser->second.rrig(buffer.data(), rig);
+				std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
+
+				if (rig.rseqpaths.empty()) {
+					printf("[!] Warning: No .rseq paths found in .rson for %s\n", rig.name.c_str());
+					continue;
+				}
+				printf("\Converting %s...\n", rig.name.c_str());
+			}
+			rig.sequences.reserve(rig.rseqpaths.size());
+
+			/* PARSE RSEQ */ {
+				parser->second.rseq(in_dir, rig);
+			}
 		}
+
+		/* WRITE */
+		{
+			/* WRITE RRIG */ {
+				if (std::filesystem::path(rig.name).extension() != ".rmdl") {
+					WriteRRIG_v8(in_dir + "/conv", rig);
+				}
+
+				if (rig.rseqpaths.empty()) {
+					printf("[!] Skipping: No RSEQ path was founded in RSON for %s\n", rig.name.c_str());
+					continue;
+				}
+			}
+
+			/* WRITE RSEQ */ {
+				writer->second.rseq(rig);
+			}
+		}
+		rig.sequences.clear();
 	}
 	printf("\n");
-
-	/* WRITE */
-	for (auto& rig : rigs) {
-		if (std::filesystem::path(rig.name).extension() == ".rmdl") {
-			printf("Skipping %s\n", rig.name.c_str());
-		}
-		else {
-			printf("Writing %s\n", rig.name.c_str());
-			WriteRRIG_v8(in_dir + "/conv", rig);
-		}
-
-		if (rig.rseqpaths.empty()) {
-			printf("[!] Skipping: No RSEQ path was founded in RSON for %s\n", rig.name.c_str());
-			continue;
-		}
-
-		printf("Writing rseqs for %s\n", rig.name.c_str());
-		WriteRSEQ_v7(rig);
-	}
 
 	/* PRINT REPAK ENTRIES */
 	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
@@ -165,14 +170,14 @@ int main(int argc, char* argv[]) {
 	std::string input_mdl;
 	std::string override_rseq_path;
 	std::string override_rrig_path;
-	std::string in_season = "28";
 
 	std::string usage = "Usage: \n" \
 		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]\n" \
 		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]\n";
 
 	//**Options:**
-	//	-`-i <season>` - Input assets season(RSEQ mode only, range: 7–28, default: 28)
+	//	- `-i <season>` - Input assets season(RSEQ mode only, range: 7–28, default: 28)
+	//  - `-o <season>` - Output assets season (range: 3 and 21, default: 3)
 	//	- `-verbose` - Enable verbose output
 	//	- `-ne` - Suppress RePak entries output
 	//	- `-skipevents` - Skip events that may cause crashes
@@ -190,7 +195,8 @@ int main(int argc, char* argv[]) {
 	input_mdl = argv[1];
 	for (int i = 2; i < argc; ++i) {
 		std::string arg = argv[i];
-		ARG_VAL("-i", in_season, "[!] Error: -i requires input assets season.\n");
+		ARG_VAL("-i", g_in_season, "[!] Error: -i requires input assets season.\n");
+		ARG_VAL("-o", g_out_season, "[!] Error: -o requires output assets season.\n");
 		ARG_BOOL("-verbose", g_EnableVerbose);
 		ARG_BOOL("-ne", g_NoEntries);
 		ARG_BOOL("-skipevents", g_SkipEvents);
@@ -214,5 +220,5 @@ int main(int argc, char* argv[]) {
 	}
 
 	// RSEQ mode: input is a directory that contains animrig/ and animseq/
-	return RunRseqMode(input_mdl, in_season);
+	return RunRseqMode(input_mdl);
 }

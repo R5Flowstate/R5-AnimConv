@@ -2,6 +2,8 @@
 #include <pch.h>
 #include <core/parsers.h>
 
+extern std::string g_in_season;
+extern std::string g_out_season;
 extern bool g_EnableVerbose;
 extern bool g_NoEntries;
 extern bool g_SkipEvents;

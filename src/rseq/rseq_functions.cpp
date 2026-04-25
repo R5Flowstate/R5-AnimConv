@@ -3,7 +3,7 @@
 
 using namespace r5;
 
-std::vector<unsigned char> comptypes(8);
+std::vector<int> comptypes(8);
 float g_AnimCompressError = 1.f;
 
 static char  s_FrameBitCountLUT[4]  { 0, 2, 4, 0 };

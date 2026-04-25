@@ -616,6 +616,11 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	stringTables.Init();
 }
 
+
+void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
+    // TODO: implement this
+}
+
 void SetFlagForDescendants(temp::rig_t& rig, int parentIdx, int flag) {
 	for (int i = 0; i < rig.hdr.numbones; ++i) {
 		if (rig.bones[i].parent == parentIdx) {

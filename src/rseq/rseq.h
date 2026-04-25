@@ -103,6 +103,7 @@ template<typename TVecType> void WriteAnimData(char*& pData, const std::vector<T
 void WriteCompressedAnim(char*& pData, uint8_t type, int N, const int16_t* qv_block, const int16_t* poly_coeffs, int ncoeffs);
 
 void WriteRSEQ_v7(temp::rig_t& rig);
+void WriteRSEQ_v11(temp::rig_t& rig);
 
-extern std::vector<unsigned char> comptypes;
+extern std::vector<int> comptypes;
 extern float g_AnimCompressError;

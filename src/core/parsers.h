@@ -8,9 +8,17 @@
 using ParseRRIGFn = void(*)(char*, temp::rig_t&);
 using ParseRSEQFn = void(*)(std::string, temp::rig_t&);
 
+using WriteRRIGFn = void(*)(std::string, const temp::rig_t&);
+using WriteRSEQFn = void(*)(temp::rig_t&);
+
 struct ParserSet {
 	ParseRRIGFn rrig;
 	ParseRSEQFn rseq;
+};
+
+struct WriterSet {
+	WriteRRIGFn rrig;
+	WriteRSEQFn rseq;
 };
 
 static const std::unordered_map<std::string, ParserSet> Parsers = {
@@ -36,4 +44,9 @@ static const std::unordered_map<std::string, ParserSet> Parsers = {
 	{"26", {ParseRRIG_v19,  ParseRSEQ_v12}},
 	{"27", {ParseRRIG_v19,  ParseRSEQ_v121}},
 	{"28", {ParseRRIG_v19,  ParseRSEQ_v121}},
+};
+
+static const std::unordered_map<std::string, WriterSet> Writers = {
+	{"3",  {WriteRRIG_v8,  WriteRSEQ_v7}},
+	{"21", {WriteRRIG_v17, WriteRSEQ_v11}}
 };

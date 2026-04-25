@@ -59,7 +59,8 @@ static void ParseRLESection(const char* pBoneFlagArray, int numbones, uint32_t b
         auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBoneFlagArray, bfa_size);
 
         for (int bone = 0; bone < numbones; bone++) {
-            const uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2));
+            const uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2)) & 0xF;
+            AssertMsg(boneFlags < 8, "BoneFlagArray is out of range.");
 
             Vector3& trackpos = anim.animdata[bone].pos[frame];
             Vector3& trackrot = anim.animdata[bone].rot[frame];
@@ -407,7 +408,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
                 for (uint32_t section = 0; section < num_sections; section++) {
                     const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
 
-                    char* pBFA = PTR_FROM_IDX(char, pAnimDesc, OFFSET(pAnimDesc->animindex));
+                    char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                     if (pAnimDesc->sectionindex)
                         pBFA = ResolveRLESectionBFA(animsections[section], (char*)pAnimDesc, seq);
 
@@ -517,7 +518,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                     for (uint32_t section = 0; section < num_sections; section++) {
                         const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
 
-                        char* pBFA = PTR_FROM_IDX(char, pAnimDesc, OFFSET(pAnimDesc->animindex));
+                        char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                         if (pAnimDesc->sectionindex)
                             pBFA = ResolveRLESectionBFA(animsections[section], (char*)pAnimDesc, seq);
 
@@ -1077,4 +1078,13 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
     }
     for (auto& t : tasks) t.get();
     printf("\n");
+}
+
+
+// ============================================================================
+//  WriteRSEQ_v11
+// ============================================================================
+
+void WriteRSEQ_v11(temp::rig_t& rig) {
+    // TODO: implement this
 }

@@ -77,7 +77,7 @@ static int RunRseqMode(const std::string& input_path) {
 		{
 			/* WRITE RRIG */ {
 				if (std::filesystem::path(rig.name).extension() != ".rmdl") {
-					WriteRRIG_v8(in_dir + "/conv", rig);
+					writer->second.rrig(in_dir + "/conv", rig);
 				}
 
 				if (rig.rseqpaths.empty()) {

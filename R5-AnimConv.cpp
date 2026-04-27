@@ -81,7 +81,6 @@ static int RunRseqMode(const std::string& input_path) {
 				}
 
 				if (rig.rseqpaths.empty()) {
-					printf("[!] Skipping: No RSEQ path was founded in RSON for %s\n", rig.name.c_str());
 					continue;
 				}
 			}
@@ -111,6 +110,12 @@ static int RunRseqMode(const std::string& input_path) {
 }
 
 static int RunMdlMode(const std::string& input_mdl, const std::string& override_rrig_path, const std::string& override_rseq_path) {
+	auto writer = Writers.find(g_out_season);
+	if (writer == Writers.end()) {
+		printf("[!] Error: Unsupported assets version.\n");
+		return 1;
+	}
+
 	std::ifstream mdl_stream(input_mdl, std::ios::binary);
 	std::filesystem::path file_path = std::filesystem::absolute(input_mdl);
 	std::string output_dir = file_path.parent_path().string();
@@ -154,9 +159,9 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 
 	/* WRITE RRIG/RSEQ */
 	printf("\n\nWriting %s\n", rig.name.c_str());
-	WriteRRIG_v8(output_dir, rig);
+	writer->second.rrig(output_dir, rig);
 	printf("Writing sequences\n");
-	WriteRSEQ_v7(rig);
+	writer->second.rseq(rig);
 
 	/* PRINT REPAK ENTRIES */
 	if (!g_NoEntries) printf("\n\nRePak Entries:\n");

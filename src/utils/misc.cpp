@@ -35,6 +35,7 @@ void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, st
 void PrintRepakEntries(temp::rig_t& rig) {
 	if (g_NoEntries) return;
 	std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
+	std::erase_if(rig.rseqpaths, [](std::string df) {return df == "df5"; });
 	for (auto& name : rig.rseqpaths) std::replace(name.begin(), name.end(), '\\', '/');
 	for (auto& name : rig.rigpaths) std::replace(name.begin(), name.end(), '\\', '/');
 

@@ -115,7 +115,9 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
             if (!std::filesystem::is_regular_file(path)) {
-                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                if (file != "df5") {
+                    printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                }
                 return;
             }
 

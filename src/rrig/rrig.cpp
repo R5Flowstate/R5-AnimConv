@@ -564,8 +564,14 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 		for (int j = 0; j < transitionsCount; j++) {
 			auto& nodedata = rig.nodes[i].nodedatas[j];
 			auto* pNodeData = reinterpret_cast<r5::v8::nodedata_t*>(pData);
+
+			int df5 = 0;
+			for (int k = 0; k < nodedata.seq; k++)
+				if (rig.rseqpaths[k] == "df5") 
+					df5++;
+
 			pNodeData[j].tonode = nodedata.tonode;
-			pNodeData[j].seq = nodedata.seq;
+			pNodeData[j].seq = (nodedata.seq - df5);
 		}
 		pData += sizeof(r5::v8::nodedata_t) * transitionsCount;
 	}

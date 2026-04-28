@@ -8,6 +8,13 @@
 #define STRING_FROM_IDX(base, idx) reinterpret_cast<const char*>((char*)base + idx)
 #define PTR_FROM_IDX(type, base, idx) reinterpret_cast<type*>((char*)base + idx)
 #define OFFSET(x) static_cast<uint32_t>((x & 0xFFFE) << (4 * (x & 1)))
+#define SHORTOFFSET(base, target) (\
+	(uint16_t)(\
+		((const char*)(target)-(const char*)(base)) <= 0xFFFE ? \
+		((const char*)(target)-(const char*)(base)) : \
+		((((const char*)(target)-(const char*)(base)) >> 4) | 1) \
+		) \
+	)
 
 // ============================================================================
 //  Alignment Macros
@@ -16,6 +23,8 @@
 #define ALIGN2( a )  a = (char *)((__int64)((char *)a + 1) & ~ 1)
 #define ALIGN4( a )  a = (char *)((__int64)((char *)a + 3) & ~ 3)
 #define ALIGN16( a ) a = (char *)((__int64)((char *)a + 15) & ~ 15)
+#define ALIGN32( a ) a = (char *)((__int64)((char *)a + 31) & ~ 31)
+#define ALIGN64( a ) a = (char *)((__int64)((char *)a + 63) & ~ 63)
 
 #define Error(fmt, ...) \
 	do { \

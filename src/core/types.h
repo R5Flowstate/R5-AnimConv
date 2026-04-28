@@ -6,56 +6,68 @@
 #include <core/math_types.h>
 
 namespace temp {
-	struct stringentry_t {
-		char* base;
-		char* addr;
-		int* ptr;
-		std::string string;
-		int dupindex;
-	};
-
+	template<typename TPtrType>
 	class StringTable {
+		struct Entry {
+			char*      base;
+			char*      addr;
+			TPtrType*  ptr;
+			std::string str;
+			int        dupindex;
+		};
 		std::unordered_map<std::string, int> dedup;
 	public:
-		std::vector<stringentry_t> stringTable;
+		std::vector<Entry> entries;
 
 		void Init() {
-			stringTable.clear();
-			stringTable.emplace_back(stringentry_t{ NULL, NULL, NULL, "", -1 });
+			entries.clear();
+			entries.emplace_back(Entry{ nullptr, nullptr, nullptr, "", -1 });
 			dedup.clear();
 			dedup.emplace("", 0);
 		}
 
 		template<typename T>
-		void Add(T* base, int* ptr, std::string str) {
+		void Add(T* base, TPtrType* ptr, std::string str) {
 			if (str.empty()) str = "";
 			auto it = dedup.find(str);
 			int dupidx = (it != dedup.end()) ? it->second : -1;
-			if (dupidx == -1) dedup.emplace(str, (int)stringTable.size());
-			stringTable.emplace_back(stringentry_t{ (char*)base, nullptr, ptr, std::move(str), dupidx });
+			if (dupidx == -1) dedup.emplace(str, (int)entries.size());
+			entries.emplace_back(Entry{ (char*)base, nullptr, ptr, std::move(str), dupidx });
 		}
 
 		template<typename T>
-		void Add(T* base, int* ptr, const char* str) {
+		void Add(T* base, TPtrType* ptr, const char* str) {
 			Add(base, ptr, std::string(str ? str : ""));
 		}
 
 		char* Write(char* pData) {
-			for (auto& it : stringTable) {
+			for (auto& it : entries) {
 				if (it.dupindex == -1) {
+					if constexpr (std::is_same_v<TPtrType, uint16_t>) { ALIGN2(pData); }
 					it.addr = pData;
 					if (it.ptr) {
-						*it.ptr = int(pData - it.base);
-						size_t length = it.string.length();
-						strcpy_s(pData, length + 1, it.string.c_str());
-
+						if constexpr (std::is_same_v<TPtrType, int> || std::is_same_v<TPtrType, int32_t>) {
+							*it.ptr = static_cast<TPtrType>(pData - it.base);
+						}
+						else if constexpr (std::is_same_v<TPtrType, uint16_t>) {
+							*it.ptr = SHORTOFFSET(it.base, pData);
+						}
+						const size_t length = it.str.length();
+						strcpy_s(pData, length + 1, it.str.c_str());
 						pData += length;
 					}
 					*pData = '\0';
 					pData++;
 				}
 				else {
-					*it.ptr = int(stringTable[it.dupindex].addr - it.base);
+					if (it.ptr) {
+						if constexpr (std::is_same_v<TPtrType, int> || std::is_same_v<TPtrType, int32_t>) {
+							*it.ptr = static_cast<TPtrType>(entries[it.dupindex].addr - it.base);
+						}
+						else if constexpr (std::is_same_v<TPtrType, uint16_t>) {
+							*it.ptr = SHORTOFFSET(it.base, entries[it.dupindex].addr);
+						}
+					}
 				}
 			}
 			return pData;

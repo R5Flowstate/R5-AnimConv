@@ -442,7 +442,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	std::vector<char> buffer(8 * 1024 * 1024, 0);
 	char* pBase = buffer.data();
 	char* pData = pBase;
-	temp::StringTable stringTables{};
+	temp::StringTable<int32_t> stringTables{};
 	stringTables.Init();
 
 	// Header
@@ -462,10 +462,6 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	pRigHdr->mins = rig.hdr.mins;
 	pRigHdr->maxs = rig.hdr.maxs;
 	pData += sizeof(r5::v8::studiohdr_t);
-
-	std::filesystem::path temp_model_dir = rig.name;
-	std::filesystem::create_directories(output_dir + "\\" + temp_model_dir.parent_path().string());
-	std::ofstream outRrig(output_dir + "\\" + rig.name, std::ios::out | std::ios::binary);
 
 	stringTables.Add((char*)pRigHdr, &pRigHdr->sznameindex, rig.name);
 	stringTables.Add((char*)pRigHdr, &pRigHdr->surfacepropindex, rig.hdr.surfaceprop);
@@ -617,6 +613,10 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	pData = stringTables.Write(pData);
 	ALIGN4(pData);
 	pRigHdr->length = static_cast<uint32_t>(pData - pBase);
+
+	std::filesystem::path temp_model_dir = rig.name;
+	std::filesystem::create_directories(output_dir + "\\" + temp_model_dir.parent_path().string());
+	std::ofstream outRrig(output_dir + "\\" + rig.name, std::ios::out | std::ios::binary);
 	outRrig.write(pBase, pData - pBase);
 	std::vector<char>().swap(buffer);
 	stringTables.Init();
@@ -624,7 +624,190 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 
 
 void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
-    // TODO: implement this
+	std::vector<char> buffer(8 * 1024 * 1024, 0);
+	char* pBase = buffer.data();
+	char* pData = pBase;
+	temp::StringTable<uint16_t> stringTables{};
+	stringTables.Init();
+
+	auto* pRigHdr = reinterpret_cast<r5::v17::studiohdr_t*>(pData);
+
+	pRigHdr->flags = rig.hdr.flags;
+	pRigHdr->checksum = 0x454E494E;
+	strncpy_s(pRigHdr->name, 33, rig.name.c_str() + std::max<int>(0, (int)rig.name.size() - 37), _TRUNCATE);
+	pRigHdr->mass = rig.hdr.mass;
+	pRigHdr->contents = rig.hdr.contents;
+	pRigHdr->illumposition = rig.hdr.illumposition;
+	pRigHdr->hull_min = rig.hdr.hull_min;
+	pRigHdr->hull_max = rig.hdr.hull_max;
+	pRigHdr->view_bbmin = rig.hdr.view_bbmin;
+	pRigHdr->view_bbmax = rig.hdr.view_bbmax;
+	pRigHdr->boneCount = static_cast<uint16_t>(rig.hdr.numbones);
+	pRigHdr->activitylistversion = static_cast<char>(rig.hdr.activitylistversion);
+	pRigHdr->fadeDistance = rig.hdr.defaultFadeDist;
+	pRigHdr->gathersize = rig.hdr.gathersize;
+	pRigHdr->surfacepropLookup = 0;
+	pRigHdr->illumpositionattachmentindex = 0;
+	pRigHdr->numlocalseq = 0;
+	pRigHdr->localseqindex = 0;
+	pRigHdr->numlocalattachments = 0;
+	pRigHdr->numtextures = 0;
+	pRigHdr->numskinref = 0;
+	pRigHdr->numskinfamilies = 0;
+	pRigHdr->numbodyparts = 0;
+	pRigHdr->uiPanelCount = 0;
+	pRigHdr->numsrcbonetransform = 0;
+	pRigHdr->procBoneCount = 0;
+	pRigHdr->unk_E0 = 0;
+	pData += sizeof(r5::v17::studiohdr_t);
+
+	stringTables.Add(pRigHdr, &pRigHdr->sznameindex, rig.name);
+	stringTables.Add(pRigHdr, &pRigHdr->surfacepropindex, rig.hdr.surfaceprop);
+
+	pRigHdr->boneHdrOffset = SHORTOFFSET(pBase, pData);
+	auto* pBoneHdrs = reinterpret_cast<r5::v16::mstudiobonehdr_t*>(pData);
+	for (int i = 0; i < pRigHdr->boneCount; i++) {
+		auto& bone = rig.bones[i];
+		stringTables.Add(&pBoneHdrs[i], &pBoneHdrs[i].sznameindex, bone.name);
+		pBoneHdrs[i].contents = bone.contents;
+		pBoneHdrs[i].surfacepropLookup = static_cast<uint8_t>(bone.surfacepropLookup);
+		pBoneHdrs[i].physicsbone = static_cast<uint16_t>(bone.physicsbone);
+		pBoneHdrs[i].unk_4 = 0;
+		pBoneHdrs[i].surfacepropidx = 0;
+		stringTables.Add(&pBoneHdrs[i], &pBoneHdrs[i].surfacepropidx, bone.surfaceprop);
+	}
+	pData += pRigHdr->boneCount * sizeof(r5::v16::mstudiobonehdr_t);
+
+	pRigHdr->numhitboxsets = static_cast<uint8_t>(rig.hitboxsets.size());
+	pRigHdr->hitboxsetindex = SHORTOFFSET(pBase, pData);
+	auto* pHitboxsets = reinterpret_cast<r5::v16::mstudiohitboxset_t*>(pData);
+	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
+		stringTables.Add(&pHitboxsets[i], &pHitboxsets[i].sznameindex, rig.hitboxsets[i].name);
+		pHitboxsets[i].numhitboxes = static_cast<uint16_t>(rig.hitboxsets[i].hitboxes.size());
+		pData += sizeof(r5::v16::mstudiohitboxset_t);
+	}
+
+	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
+		auto* pHitboxes = reinterpret_cast<r5::v16::mstudiobbox_t*>(pData);
+		pHitboxsets[i].hitboxindex = SHORTOFFSET(&pHitboxsets[i], pData);
+		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
+			auto& hitbox = rig.hitboxsets[i].hitboxes[j];
+			stringTables.Add(&pHitboxes[j], &pHitboxes[j].szhitboxnameindex, hitbox.name);
+			stringTables.Add(&pHitboxes[j], &pHitboxes[j].hitdataGroupOffset, hitbox.hitdataGroupOffset);
+			pHitboxes[j].bone = static_cast<int16_t>(hitbox.bone);
+			pHitboxes[j].group = static_cast<int16_t>(hitbox.group);
+			pHitboxes[j].bbmin = hitbox.bbmin;
+			pHitboxes[j].bbmax = hitbox.bbmax;
+			pData += sizeof(r5::v16::mstudiobbox_t);
+		}
+	}
+
+	pRigHdr->bonetablebynameindex = SHORTOFFSET(pBase, pData);
+	char* pBonebynames = reinterpret_cast<char*>(pData);
+	memcpy_s(pBonebynames, 256, rig.bonebyname.data(), pRigHdr->boneCount);
+	pData += sizeof(char) * pRigHdr->boneCount;
+	ALIGN4(pData);
+
+	pRigHdr->localattachmentindex = SHORTOFFSET(pBase, pData);
+
+	pRigHdr->numlocalnodes = static_cast<uint16_t>(rig.nodes.size());
+	pRigHdr->localnodenameindex = SHORTOFFSET(pBase, pData);
+	auto* pNodenames = reinterpret_cast<uint16_t*>(pData);
+	for (int i = 0; i < pRigHdr->numlocalnodes; i++) {
+		stringTables.Add(pNodenames, &pNodenames[i], rig.nodes[i].name);
+	}
+	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
+
+	pRigHdr->localNodeDataOffset = SHORTOFFSET(pBase, pData);
+	auto* pNodeDataIndex = reinterpret_cast<uint16_t*>(pData);
+	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
+
+	for (int i = 0; i < pRigHdr->numlocalnodes; i++) {
+		pNodeDataIndex[i] = SHORTOFFSET(pNodeDataIndex, pData);
+		uint16_t transitionsCount = static_cast<uint16_t>(rig.nodes[i].nodedatas.size());
+		auto* pNodeCount = reinterpret_cast<uint16_t*>(pData);
+		*pNodeCount = transitionsCount;
+		pData += sizeof(uint16_t);
+
+		for (int j = 0; j < transitionsCount; j++) {
+			auto& nodedata = rig.nodes[i].nodedatas[j];
+			auto* pNodeData = reinterpret_cast<r5::v8::nodedata_t*>(pData);
+
+			int df5 = 0;
+			for (int k = 0; k < nodedata.seq; k++)
+				if (rig.rseqpaths[k] == "df5")
+					df5++;
+
+			pNodeData[j].tonode = nodedata.tonode;
+			pNodeData[j].seq = (nodedata.seq - df5);
+		}
+		pData += sizeof(r5::v8::nodedata_t) * transitionsCount;
+	}
+
+	pRigHdr->numlocalposeparameters = static_cast<uint16_t>(rig.poseparams.size());
+	pRigHdr->localposeparamindex = SHORTOFFSET(pBase, pData);
+	auto* pPoseparams = reinterpret_cast<r5::v16::mstudioposeparamdesc_t*>(pData);
+	for (int i = 0; i < pRigHdr->numlocalposeparameters; i++) {
+		stringTables.Add(&pPoseparams[i], &pPoseparams[i].sznameindex, rig.poseparams[i].name);
+		pPoseparams[i].start = rig.poseparams[i].start;
+		pPoseparams[i].end = rig.poseparams[i].end;
+		pPoseparams[i].flags = static_cast<uint16_t>(rig.poseparams[i].flags);
+		pPoseparams[i].loop = rig.poseparams[i].loop;
+	}
+	pData += sizeof(r5::v16::mstudioposeparamdesc_t) * pRigHdr->numlocalposeparameters;
+
+	pRigHdr->numikchains = static_cast<uint16_t>(rig.ikchains.size());
+	pRigHdr->ikchainindex = SHORTOFFSET(pBase, pData);
+	auto* pIkchains = reinterpret_cast<r5::v16::mstudioikchain_t*>(pData);
+	for (int i = 0; i < pRigHdr->numikchains; i++) {
+		stringTables.Add(&pIkchains[i], &pIkchains[i].sznameindex, rig.ikchains[i].name);
+		pIkchains[i].linktype = static_cast<uint16_t>(rig.ikchains[i].linktype);
+		pIkchains[i].unk = rig.ikchains[i].unk;
+		pIkchains[i].numlinks = static_cast<uint16_t>(rig.ikchains[i].iklinks.size());
+	}
+	pData += sizeof(r5::v16::mstudioikchain_t) * pRigHdr->numikchains;
+
+	for (int i = 0; i < pRigHdr->numikchains; i++) {
+		pIkchains[i].linkindex = SHORTOFFSET(&pIkchains[i], pData);
+		auto* pIklinks = reinterpret_cast<r5::v8::mstudioiklink_t*>(pData);
+		for (int j = 0; j < pIkchains[i].numlinks; j++) {
+			auto& iklink = rig.ikchains[i].iklinks[j];
+			pIklinks[j].bone = iklink.bone;
+			pIklinks[j].kneeDir = iklink.kneeDir;
+		}
+		pData += sizeof(r5::v8::mstudioiklink_t) * pIkchains[i].numlinks;
+	}
+
+	pData = stringTables.Write(pData);
+
+	ALIGN64(pData);
+	pRigHdr->boneDataOffset = SHORTOFFSET(pBase, pData);
+	auto* pBoneDatas = reinterpret_cast<r5::v16::mstudiobonedata_t*>(pData);
+	for (int i = 0; i < pRigHdr->boneCount; i++) {
+		auto& bone = rig.bones[i];
+		pBoneDatas[i].poseToBone = bone.poseToBone;
+		pBoneDatas[i].qAlignment = bone.qAlignment;
+		pBoneDatas[i].pos = bone.pos;
+		pBoneDatas[i].quat = bone.q;
+		pBoneDatas[i].rot = bone.rot;
+		pBoneDatas[i].scale = bone.scl;
+		pBoneDatas[i].parent = static_cast<int16_t>(bone.parent);
+		pBoneDatas[i].unk_76 = 0;
+		pBoneDatas[i].flags = bone.flags;
+		pBoneDatas[i].collisionIndex = 0;
+		pBoneDatas[i].proctype = static_cast<uint8_t>(bone.proctype);
+		pBoneDatas[i].procindex = static_cast<uint16_t>(bone.procindex);
+	}
+	pData += pRigHdr->boneCount * sizeof(r5::v16::mstudiobonedata_t);
+
+	ALIGN4(pData);
+
+	std::filesystem::path temp_model_dir = rig.name;
+	std::filesystem::create_directories(output_dir + "\\" + temp_model_dir.parent_path().string());
+	std::ofstream outRrig(output_dir + "\\" + rig.name, std::ios::out | std::ios::binary);
+	outRrig.write(pBase, pData - pBase);
+	std::vector<char>().swap(buffer);
+	stringTables.Init();
 }
 
 void SetFlagForDescendants(temp::rig_t& rig, int parentIdx, int flag) {

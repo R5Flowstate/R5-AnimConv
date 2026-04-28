@@ -690,11 +690,8 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
             std::vector<char> buffer(8 * 1024 * 1024, 0);
             char* pBase = buffer.data();
             char* pData = pBase;
-            temp::StringTable stringTables{};
+            temp::StringTable<int32_t> stringTables{};
             stringTables.Init();
-
-            std::filesystem::create_directories(std::filesystem::path(seq.outpath).parent_path());
-            std::ofstream outRseq(seq.outpath, std::ios::out | std::ios::binary);
 
             auto* v7RseqDesc = reinterpret_cast<anim::v7::mstudioseqdesc_t*>(pData);
             stringTables.Add(v7RseqDesc, &v7RseqDesc->szlabelindex,       seq.name);
@@ -1068,6 +1065,9 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
 
             pData = stringTables.Write(pData);
             ALIGN4(pData);
+
+            std::filesystem::create_directories(std::filesystem::path(seq.outpath).parent_path());
+            std::ofstream outRseq(seq.outpath, std::ios::out | std::ios::binary);
             outRseq.write(pBase, pData - pBase);
 
             {
@@ -1087,6 +1087,410 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
 //  WriteRSEQ_v11
 // ============================================================================
 
+// TODO: add stallframes
+//       add _extn
+
 void WriteRSEQ_v11(temp::rig_t& rig) {
-    // TODO: implement this
+    ProgressBar bar(rig.sequences.size());
+    std::vector<std::future<void>> tasks;
+    std::mutex mutex;
+
+    if (!g_EnableVerbose && !rig.sequences.empty()) bar.Print();
+
+    tasks.reserve(rig.sequences.size());
+    for (auto& seq : rig.sequences) {
+        tasks.push_back(std::async(std::launch::async, [&]() {
+            std::vector<char> buffer(8 * 1024 * 1024, 0);
+            char* pBase = buffer.data();
+            char* pData = pBase;
+            temp::StringTable<uint16_t> stringTables{};
+            stringTables.Init();
+
+            auto* v11SeqDesc = reinterpret_cast<anim::v11::mstudioseqdesc_t*>(pData);
+            stringTables.Add(v11SeqDesc, &v11SeqDesc->szlabelindex,        seq.name);
+            stringTables.Add(v11SeqDesc, &v11SeqDesc->szactivitynameindex, seq.activityname);
+            v11SeqDesc->flags               = seq.flags;
+            v11SeqDesc->activity            = static_cast<uint16_t>(seq.activity);
+            v11SeqDesc->actweight           = static_cast<uint16_t>(seq.actweight);
+            v11SeqDesc->bbmin               = seq.bbmin;
+            v11SeqDesc->bbmax               = seq.bbmax;
+            v11SeqDesc->numblends           = static_cast<uint16_t>(seq.blends.size());
+            v11SeqDesc->groupsize[0]        = static_cast<uint8_t>(seq.groupsize[0]);
+            v11SeqDesc->groupsize[1]        = static_cast<uint8_t>(seq.groupsize[1]);
+            v11SeqDesc->paramindex[0]       = static_cast<short>(seq.paramindex[0]);
+            v11SeqDesc->paramindex[1]       = static_cast<short>(seq.paramindex[1]);
+            v11SeqDesc->paramstart[0]       = seq.paramstart[0];
+            v11SeqDesc->paramstart[1]       = seq.paramstart[1];
+            v11SeqDesc->paramend[0]         = seq.paramend[0];
+            v11SeqDesc->paramend[1]         = seq.paramend[1];
+            v11SeqDesc->fadeintime          = seq.fadeintime;
+            v11SeqDesc->fadeouttime         = seq.fadeouttime;
+            v11SeqDesc->localentrynode      = (seq.localentrynode == rig.ignorenode) ? 0 : static_cast<uint16_t>(seq.localentrynode);
+            v11SeqDesc->localexitnode       = (seq.localexitnode  == rig.ignorenode) ? 0 : static_cast<uint16_t>(seq.localexitnode);
+            v11SeqDesc->numikrules          = 0;
+            v11SeqDesc->numiklocks          = 0;
+            v11SeqDesc->unk_5C              = 0;
+            v11SeqDesc->cycleposeindex      = 0;
+            v11SeqDesc->numautolayers       = static_cast<uint16_t>(seq.autolayers.size());
+            v11SeqDesc->numactivitymodifiers = static_cast<uint16_t>(seq.actmods.size());
+            v11SeqDesc->ikResetMask         = seq.ikResetMask;
+            v11SeqDesc->unk1                = seq.unk1;
+            v11SeqDesc->weightFixupCount    = 0;
+            pData += sizeof(anim::v11::mstudioseqdesc_t);
+
+            verbose("%s\n", seq.name.c_str());
+
+            if (!seq.posekeys.empty()) {
+                v11SeqDesc->posekeyindex = SHORTOFFSET(pBase, pData);
+                auto* posekeys = reinterpret_cast<float*>(pData);
+                const int pkcount = (int)seq.posekeys.size();
+                for (int i = 0; i < pkcount; i++) posekeys[i] = seq.posekeys[i];
+                pData += sizeof(float) * pkcount;
+            }
+
+            if (g_SkipEvents) {
+                auto& evts = seq.events;
+                evts.erase(std::remove_if(evts.begin(), evts.end(), [](const temp::seqevent_t& e) {
+                    return e.name == "AE_CL_CREATE_PROP"              ||
+                           e.name == "AE_CL_DESTROY_PROP"             ||
+                           e.name == "AE_CL_SCRIPT_ANIM_WINDOW_BEGIN" ||
+                           e.name == "AE_CL_SCRIPT_ANIM_WINDOW_END";
+                }), evts.end());
+            }
+
+            v11SeqDesc->numevents  = static_cast<uint16_t>(seq.events.size());
+            v11SeqDesc->eventindex = SHORTOFFSET(pBase, pData);
+            if (v11SeqDesc->numevents) {
+                auto* v11Events = reinterpret_cast<anim::v11::mstudioevent_t*>(pData);
+                const int nevents = (int)v11SeqDesc->numevents;
+                for (int i = 0; i < nevents; i++) {
+                    v11Events[i].cycle = seq.events[i].cycle;
+                    v11Events[i].event = seq.events[i].event;
+                    v11Events[i].type  = seq.events[i].type;
+                    v11Events[i].unk   = 0;
+                    stringTables.Add(&v11Events[i], reinterpret_cast<uint16_t*>(&v11Events[i].szeventindex), seq.events[i].name);
+                    stringTables.Add(&v11Events[i], reinterpret_cast<uint16_t*>(&v11Events[i].optionsindex), seq.events[i].options);
+                }
+            }
+            pData += sizeof(anim::v11::mstudioevent_t) * v11SeqDesc->numevents;
+
+            v11SeqDesc->autolayerindex = SHORTOFFSET(pBase, pData);
+            auto* v11Autolayer = reinterpret_cast<anim::v11::mstudioautolayer_t*>(pData);
+            const int nautolayers = (int)seq.autolayers.size();
+            for (int i = 0; i < nautolayers; i++) {
+                v11Autolayer[i].guidSequence = seq.autolayers[i].guidSequence;
+                v11Autolayer[i].iPose        = seq.autolayers[i].iPose;
+                v11Autolayer[i].flags        = seq.autolayers[i].flags;
+                v11Autolayer[i].start        = seq.autolayers[i].start;
+                v11Autolayer[i].peak         = seq.autolayers[i].peak;
+                v11Autolayer[i].tail         = seq.autolayers[i].tail;
+                v11Autolayer[i].end          = seq.autolayers[i].end;
+            }
+            pData += v11SeqDesc->numautolayers * sizeof(anim::v11::mstudioautolayer_t);
+
+            v11SeqDesc->weightlistindex = SHORTOFFSET(pBase, pData);
+            auto* v11WeightList = reinterpret_cast<float*>(pData);
+            const int nbones = (int)rig.bones.size();
+            for (int i = 0; i < nbones; i++) v11WeightList[i] = seq.weightlist[i];
+            pData += sizeof(float) * nbones;
+
+            v11SeqDesc->iklockindex = SHORTOFFSET(pBase, pData);
+
+            v11SeqDesc->activitymodifierindex = SHORTOFFSET(pBase, pData);
+            auto* v11Actmod = reinterpret_cast<anim::v11::mstudioactivitymodifier_t*>(pData);
+            const int nactmods = (int)seq.actmods.size();
+            for (int i = 0; i < nactmods; i++) {
+                stringTables.Add(&v11Actmod[i], &v11Actmod[i].sznameindex, seq.actmods[i].name);
+                v11Actmod[i].negate = seq.actmods[i].negate;
+                v11Actmod[i].pad    = 0;
+            }
+            pData += sizeof(anim::v11::mstudioactivitymodifier_t) * v11SeqDesc->numactivitymodifiers;
+
+            std::vector<std::pair<int, int>> blends_index_map;
+            v11SeqDesc->animindexindex = SHORTOFFSET(pBase, pData);
+            auto* v11Blends = reinterpret_cast<uint16_t*>(pData);
+            pData += sizeof(uint16_t) * v11SeqDesc->numblends;
+            ALIGN2(pData);
+
+            for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+                blends_index_map.push_back({ seq.blends[anim_iter], (int)(pData - pBase) });
+                temp::animdesc_t anim = seq.anims[anim_iter];
+                anim.SubtractBase(rig.bones.size(), rig, seq.IsAdditive());
+
+                constexpr uint32_t targetsectionframes = 61;
+
+                auto* animDesc = reinterpret_cast<anim::v11::mstudioanimdesc_t*>(pData);
+                stringTables.Add(animDesc, &animDesc->sznameindex, anim.name);
+                animDesc->fps                 = anim.fps;
+                animDesc->flags               = anim.flags & ~r5::ANIM_DATAPOINT;
+                animDesc->numframes           = anim.numframes;
+                animDesc->framemovementindex  = 0;
+                animDesc->numikrules          = static_cast<uint16_t>(anim.ikrules.size());
+                animDesc->sectionDataExternal = 0;
+                animDesc->unk1                = 0;
+                animDesc->sectionstallframes  = 0;
+                animDesc->sectionframes       = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(targetsectionframes) : 0;
+                animDesc->sectionindex        = 0;
+                animDesc->ikruleindex         = 0;
+
+                pData += sizeof(anim::v11::mstudioanimdesc_t);
+                animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
+
+                if (!(anim.flags & ANIM_VALID)) continue;
+
+                uint32_t  numsections = 1;
+                int32_t*  animsections{};
+                if (anim.numframes > (int)targetsectionframes) {
+                    animDesc->sectionindex = SHORTOFFSET(animDesc, pData);
+                    numsections    = GetSectionCount(*animDesc);
+                    animsections   = reinterpret_cast<int32_t*>(pData);
+                    pData += sizeof(int32_t) * numsections;
+                }
+                animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
+
+                uint32_t startframe = 0;
+                for (uint32_t section = 0; section < numsections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*animDesc, section, numsections);
+                    const bool     bInterpframe  = (section + 1 != numsections);
+                    const uint32_t endframe      = startframe + sectionframes + bInterpframe;
+
+                    if (numsections > 1)
+                        animsections[section] = static_cast<int32_t>(pData - (char*)animDesc);
+
+                    const uint32_t bfa_size = ((rig.bones.size() + 3) / 2) & ~1u;
+                    static thread_local std::vector<uint8_t> flaggedBones;
+                    flaggedBones.assign(bfa_size * 2, 0);
+                    char* boneflagarray = reinterpret_cast<char*>(pData);
+                    pData += bfa_size;
+
+                    for (int bone = 0; bone < nbones; bone++) {
+                        auto& animData = anim.animdata[bone];
+                        uint8_t boneFlags = 0;
+
+                        const bool bRawpos = allEqualVector(animData.pos, startframe, endframe);
+                        const bool bRawrot = allEqualVector(animData.rot, startframe, endframe);
+                        const bool bRawscl = allEqualVector(animData.scl, startframe, endframe);
+
+                        const bool bHasPosData = !bRawpos || !animData.pos[startframe].approx_equal({0,0,0});
+                        const bool bHasRotData = !bRawrot || !animData.rot[startframe].approx_equal(rig.bones[bone].rot);
+                        const bool bHasSclData = !bRawscl || !animData.scl[startframe].approx_equal({0,0,0});
+
+                        if (!bHasPosData && !bHasRotData && !bHasSclData) continue;
+
+                        auto* animRLE = reinterpret_cast<anim::mstudio_rle_anim_t*>(pData);
+                        pData += sizeof(anim::mstudio_rle_anim_t);
+
+                        anim::studioanimvalue_ptr_t* animposptr{};
+                        anim::studioanimvalue_ptr_t* animrotptr{};
+                        anim::studioanimvalue_ptr_t* animsclptr{};
+
+                        float posscale = 0.003906369f;
+                        Vector3 maxpos{}, minpos{};
+                        findMinMaxSIMD(animData.pos, startframe, endframe, minpos, maxpos);
+                        const float v1max = std::max({ std::fabs(maxpos.Max()), std::fabs(minpos.Min()) });
+                        if (v1max > 127.f) posscale = (v1max * 2.f) / 65534.f;
+
+                        if (bHasPosData) {
+                            boneFlags |= 0x1;
+                            if (bRawpos) {
+                                Vector3 val = animData.pos[startframe];
+                                if (!seq.IsAdditive()) val += rig.bones[bone].pos;
+                                *(Vector48*)pData = Pack48(val);
+                                pData += sizeof(Vector48);
+                            }
+                            else {
+                                animRLE->bAnimPosition = true;
+                                *(float*)pData = posscale;
+                                pData += sizeof(float);
+                                animposptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
+                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                            }
+                        }
+
+                        if (bHasRotData) {
+                            boneFlags |= 0x2;
+                            if (bRawrot) {
+                                Quaternion q{};
+                                AngleQuaternion(animData.rot[startframe], q);
+                                *(Quaternion64*)pData = PackQuat64(q);
+                                pData += sizeof(Quaternion64);
+                            }
+                            else {
+                                animRLE->bAnimRotation = true;
+                                animrotptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
+                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                            }
+                        }
+
+                        if (bHasSclData) {
+                            boneFlags |= 0x4;
+                            if (bRawscl) {
+                                Vector3 val = animData.scl[startframe];
+                                if (!seq.IsAdditive()) val += rig.bones[bone].scl;
+                                *(Vector48*)pData = Pack48(val);
+                                pData += sizeof(Vector48);
+                            }
+                            else {
+                                animRLE->bAnimScale = true;
+                                animsclptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
+                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                            }
+                        }
+
+                        if (bHasPosData && !bRawpos) WriteAnim(pData, animposptr, animData.pos, startframe, endframe, posscale);
+                        if (bHasRotData && !bRawrot) WriteAnim(pData, animrotptr, animData.rot, startframe, endframe, 0.00019175345f);
+                        if (bHasSclData && !bRawscl) WriteAnim(pData, animsclptr, animData.scl, startframe, endframe, 0.0030518509f);
+
+                        animRLE->size = (int)(pData - (char*)animRLE);
+                        flaggedBones[bone] = boneFlags;
+
+                        const int bfahalf = (int)(flaggedBones.size() / 2);
+                        for (int i = 0; i < bfahalf; i++) {
+                            boneflagarray[i]  = flaggedBones[i * 2];
+                            boneflagarray[i] |= flaggedBones[i * 2 + 1] << 4;
+                        }
+                    }
+                    ALIGN4(pData);
+                    startframe += sectionframes;
+                }
+
+                if (!anim.ikrules.empty()) {
+                    v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
+                    animDesc->numikrules   = static_cast<uint16_t>(anim.ikrules.size());
+                    animDesc->ikruleindex  = SHORTOFFSET(animDesc, pData);
+                    auto* v11Ikrule        = reinterpret_cast<anim::v11::mstudioikrule_t*>(pData);
+
+                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
+                        const temp::ikrule_t& ikrule = anim.ikrules[i];
+                        v11Ikrule[i].chain        = static_cast<short>(ikrule.chain);
+                        v11Ikrule[i].bone         = static_cast<short>(ikrule.bone);
+                        v11Ikrule[i].type         = static_cast<char>(ikrule.type);
+                        v11Ikrule[i].slot         = static_cast<char>(ikrule.slot);
+                        v11Ikrule[i].sectionframes = static_cast<uint16_t>(ikrule.sectionframes);
+                        for (int j = 0; j < 6; j++) v11Ikrule[i].scale[j] = ikrule.scale[j];
+                        v11Ikrule[i].compressedikerrorindex = 0;
+                        v11Ikrule[i].iStart        = static_cast<short>(ikrule.iStart);
+                        v11Ikrule[i].ikerrorindex  = 0;
+                        v11Ikrule[i].szattachmentindex = 0;
+                        v11Ikrule[i].start         = ikrule.start;
+                        v11Ikrule[i].peak          = ikrule.peak;
+                        v11Ikrule[i].tail          = ikrule.tail;
+                        v11Ikrule[i].end           = ikrule.end;
+                        v11Ikrule[i].contact       = ikrule.contact;
+                        v11Ikrule[i].drop          = ikrule.drop;
+                        v11Ikrule[i].top           = ikrule.top;
+                        v11Ikrule[i].height        = ikrule.height;
+                        v11Ikrule[i].endHeight     = ikrule.endHeight;
+                        v11Ikrule[i].radius        = ikrule.radius;
+                        v11Ikrule[i].floor         = ikrule.floor;
+                        v11Ikrule[i].pos           = ikrule.pos;
+                        v11Ikrule[i].q             = ikrule.q;
+                        if (!ikrule.attachmentname.empty())
+                            stringTables.Add(&v11Ikrule[i], &v11Ikrule[i].szattachmentindex, ikrule.attachmentname);
+                        pData += sizeof(anim::v11::mstudioikrule_t);
+                    }
+
+                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
+                        const temp::ikrule_t& ikrule = anim.ikrules[i];
+                        if (!ikrule.sectionframes) continue;
+
+                        v11Ikrule[i].compressedikerrorindex = SHORTOFFSET(&v11Ikrule[i], pData);
+
+                        const int32_t sectioncount = static_cast<int32_t>((float)(anim.numframes - 1) / (float)ikrule.sectionframes) + 1;
+                        auto* sectionindices = reinterpret_cast<uint16_t*>(pData);
+                        pData += sizeof(uint16_t) * sectioncount;
+
+                        Vector3 mn{}, mx{}, mn1{}, mx1{};
+                        findMinMaxSIMD(ikrule.ikruledata.pos, 0, anim.numframes, mn, mx);
+                        findMinMaxSIMD(ikrule.ikruledata.rot, 0, anim.numframes, mn1, mx1);
+                        for (int j = 0; j < 6; j++) {
+                            const float v1 = (j < 3)
+                                ? std::max({ std::fabs(mx[j]),    std::fabs(mn[j]) })
+                                : std::max({ std::fabs(mx1[j-3]), std::fabs(mn1[j-3]) });
+                            if (v1 > 127.f) v11Ikrule[i].scale[j] = (v1 * 2.f) / 65534.f;
+                        }
+
+                        uint32_t ikstartframe = 0;
+                        for (int section = 0; section < sectioncount; section++) {
+                            sectionindices[section] = SHORTOFFSET(&v11Ikrule[i], pData);
+                            const int sectionframes = GetSectionLength(anim.numframes, ikrule.sectionframes, section);
+                            const uint32_t framerange = sectionframes + !(section + 1 == sectioncount);
+                            const uint32_t endframe   = ikstartframe + framerange;
+
+                            auto* offsets = reinterpret_cast<int16_t*>(pData);
+                            pData += 6 * sizeof(int16_t);
+
+                            for (int idx = 0; idx < 3; idx++) {
+                                offsets[idx] = static_cast<int16_t>(pData - (char*)offsets);
+                                WriteAnimData(pData, ikrule.ikruledata.pos, ikstartframe, endframe, idx, ikrule.scale[idx]);
+                            }
+                            for (int idx = 0; idx < 3; idx++) {
+                                offsets[idx + 3] = static_cast<int16_t>(pData - (char*)offsets);
+                                WriteAnimData(pData, ikrule.ikruledata.rot, ikstartframe, endframe, idx, ikrule.scale[idx + 3]);
+                            }
+                            ikstartframe += sectionframes;
+                        }
+                    }
+                }
+
+                if ((anim.flags & r5::ANIM_FRAMEMOVEMENT) && anim.movement.sectionframes != 0) {
+                    animDesc->framemovementindex = SHORTOFFSET(animDesc, pData);
+                    auto* frameMovement = reinterpret_cast<anim::v7::mstudioframemovement_t*>(pData);
+                    frameMovement->scale         = anim.movement.scale;
+                    frameMovement->sectionframes = anim.movement.sectionframes;
+                    pData += sizeof(anim::v7::mstudioframemovement_t);
+
+                    auto& movementdata = anim.movement.movementdata;
+                    const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)anim.movement.sectionframes) + 1;
+                    auto* sectionindices = reinterpret_cast<uint16_t*>(pData);
+                    pData += sizeof(uint16_t) * sectioncount;
+
+                    Vector4 mn{}, mx{};
+                    findMinMaxSIMD(movementdata, 0, (int)movementdata.size(), mn, mx);
+                    for (int idx = 0; idx < 4; idx++) {
+                        const float v1 = std::max({ std::fabs(mx[idx]), std::fabs(mn[idx]) });
+                        if (v1 > 127.f) frameMovement->scale[idx] = (v1 * 2.f) / 65534.f;
+                    }
+
+                    uint32_t fmstartframe = 0;
+                    for (uint32_t section = 0; section < sectioncount; section++) {
+                        sectionindices[section] = SHORTOFFSET(frameMovement, pData);
+                        const int      sectionframes = GetSectionLength(anim.numframes, anim.movement.sectionframes, section);
+                        const uint32_t framerange    = sectionframes + !(section + 1 == sectioncount);
+                        const uint32_t endframe      = fmstartframe + framerange;
+
+                        auto* offsets = reinterpret_cast<int16_t*>(pData);
+                        pData += 4 * sizeof(int16_t);
+
+                        for (int idx = 0; idx < 4; idx++) {
+                            if (allEqualVector(movementdata, fmstartframe, endframe, idx, frameMovement->scale[idx]) && movementdata[fmstartframe][idx] == 0) continue;
+                            offsets[idx] = static_cast<int16_t>(pData - (char*)offsets);
+                            WriteAnimData(pData, movementdata, fmstartframe, endframe, idx, frameMovement->scale[idx]);
+                        }
+                        fmstartframe += sectionframes;
+                    }
+                }
+            }
+
+            for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++)
+                v11Blends[iter] = SHORTOFFSET(pBase, pBase + blends_index_map[seq.blends[iter]].second);
+
+            v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
+
+            pData = stringTables.Write(pData);
+            ALIGN4(pData);
+
+            std::filesystem::create_directories(std::filesystem::path(seq.outpath).parent_path());
+            std::ofstream outRseq(seq.outpath, std::ios::out | std::ios::binary);
+            outRseq.write(pBase, pData - pBase);
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                seq.anims.clear();
+            }
+        }));
+        if (!g_EnableVerbose) bar.AddAndPrint();
+    }
+    for (auto& t : tasks) t.get();
+    printf("\n");
 }

@@ -60,10 +60,8 @@ static int RunRseqMode(const std::string& input_path) {
 				parser->second.rrig(buffer.data(), rig);
 				std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
 
-				if (rig.rseqpaths.empty()) {
-					printf("[!] Warning: No .rseq paths found in .rson for %s\n", rig.name.c_str());
-					continue;
-				}
+				if (rig.rseqpaths.empty()) continue;
+				
 				printf("\Converting %s...\n", rig.name.c_str());
 			}
 			rig.sequences.reserve(rig.rseqpaths.size());

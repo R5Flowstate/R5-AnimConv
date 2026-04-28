@@ -17,6 +17,7 @@ R5-AnimConv.exe <parent_directory> [-i <in_season>] [-verbose] [-ne] [-skipevent
 
 >**Options:**
 >- `-i <season>` — Input assets season (RSEQ mode only, range: 7–28, default: 28)
+>- `-o <season>` — Output assets season (range: 3 and 21, default: 3)
 >- `-verbose` — Enable verbose output
 >- `-ne` — Suppress RePak entries output
 >- `-skipevents` — Skip events that may cause crashes
@@ -30,11 +31,15 @@ R5-AnimConv.exe <parent_directory> [-i <in_season>] [-verbose] [-ne] [-skipevent
 ### Supported Versions
 
 >**MDL Mode**
->- v49 *(missing ikrules / movements)*
+>- v49 *(Missing ikrules / movements)*
 >- v53
 
 >**RSEQ Mode**
->- Seasons **S7 – S28**
+>- Seasons **7 – 28**
+
+>**Outputs**
+>- Season **3**
+>- Season **21** *(Experimental)*
 
 ---
 ### Based on:

@@ -9,16 +9,16 @@
 
 ``` bash
 # MDL mode
-R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-nopause] [-comperr <error>]
+R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose <level>] [-ne] [-nopause] [-comperr <error>]
 
 # RSEQ mode
-R5-AnimConv.exe <parent_directory> [-i <in_season>] [-verbose] [-ne] [-skipevents] [-nopause] [-comperr <error>]
+R5-AnimConv.exe <parent_directory> [-i <in_season>] [-verbose <level>] [-ne] [-skipevents] [-nopause] [-comperr <error>]
 ```
 
 >**Options:**
 >- `-i <season>` — Input assets season (RSEQ mode only, range: 7–28, default: 28)
 >- `-o <season>` — Output assets season (range: 3 and 21, default: 3)
->- `-verbose` — Enable verbose output
+>- `-verbose <level>` - Verbose output (0: No verbose, 1: Minimal, 2: Full verbose, default: 1)
 >- `-ne` — Suppress RePak entries output
 >- `-skipevents` — Skip events that may cause crashes
 >- `-nopause` — No pause at execution end

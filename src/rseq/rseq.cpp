@@ -106,7 +106,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -116,7 +116,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
 
             if (!std::filesystem::is_regular_file(path)) {
                 if (file != "df5") {
-                    printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                    print("[!] Error: rseq not found for %s\n", rel.string().c_str());
                 }
                 return;
             }
@@ -126,7 +126,7 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v7::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -210,10 +210,10 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
             }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 // ============================================================================
@@ -225,7 +225,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -234,7 +234,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
             if (!std::filesystem::is_regular_file(path)) {
-                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                print("[!] Error: rseq not found for %s\n", rel.string().c_str());
                 return;
             }
 
@@ -243,7 +243,7 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v10::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -327,10 +327,10 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 // ============================================================================
@@ -342,7 +342,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -351,7 +351,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
             if (!std::filesystem::is_regular_file(path)) {
-                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                print("[!] Error: rseq not found for %s\n", rel.string().c_str());
                 return;
             }
 
@@ -360,7 +360,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v11::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -428,10 +428,10 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 
@@ -444,7 +444,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -453,7 +453,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
             if (!std::filesystem::is_regular_file(path)) {
-                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                print("[!] Error: rseq not found for %s\n", rel.string().c_str());
                 return;
             }
 
@@ -463,7 +463,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v12::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -539,10 +539,10 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 
@@ -555,7 +555,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.rseqpaths.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
 
     tasks.reserve(rig.rseqpaths.size());
     for (const auto& file : rig.rseqpaths) {
@@ -564,7 +564,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
             if (!std::filesystem::is_regular_file(path)) {
-                printf("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                print("[!] Error: rseq not found for %s\n", rel.string().c_str());
                 return;
             }
 
@@ -574,7 +574,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
             const std::string out_dir = BuildOutputPath(in_dir, rel);
 
             if (inputFileSize <= sizeof(anim::v121::mstudioseqdesc_t)) {
-                printf("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
                 return;
             }
 
@@ -667,10 +667,10 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 rig.sequences.push_back(std::move(seq));
             }
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 // ============================================================================
@@ -682,7 +682,7 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.sequences.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.sequences.empty()) bar.Print();
 
     tasks.reserve(rig.sequences.size());
     for (auto& seq : rig.sequences) {
@@ -1076,10 +1076,10 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
             }
 
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }
 
 
@@ -1095,7 +1095,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
     std::vector<std::future<void>> tasks;
     std::mutex mutex;
 
-    if (!g_EnableVerbose && !rig.sequences.empty()) bar.Print();
+    if ((g_VerboseLevel == 1) && !rig.sequences.empty()) bar.Print();
 
     tasks.reserve(rig.sequences.size());
     for (auto& seq : rig.sequences) {
@@ -1140,6 +1140,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
             verbose("%s\n", seq.name.c_str());
 
+            ALIGN2(pData);
             if (!seq.posekeys.empty()) {
                 v11SeqDesc->posekeyindex = SHORTOFFSET(pBase, pData);
                 auto* posekeys = reinterpret_cast<float*>(pData);
@@ -1158,6 +1159,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }), evts.end());
             }
 
+            ALIGN2(pData);
             v11SeqDesc->numevents  = static_cast<uint16_t>(seq.events.size());
             v11SeqDesc->eventindex = SHORTOFFSET(pBase, pData);
             if (v11SeqDesc->numevents) {
@@ -1174,6 +1176,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += sizeof(anim::v11::mstudioevent_t) * v11SeqDesc->numevents;
 
+            ALIGN2(pData);
             v11SeqDesc->autolayerindex = SHORTOFFSET(pBase, pData);
             auto* v11Autolayer = reinterpret_cast<anim::v11::mstudioautolayer_t*>(pData);
             const int nautolayers = (int)seq.autolayers.size();
@@ -1188,14 +1191,17 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += v11SeqDesc->numautolayers * sizeof(anim::v11::mstudioautolayer_t);
 
+            ALIGN2(pData);
             v11SeqDesc->weightlistindex = SHORTOFFSET(pBase, pData);
             auto* v11WeightList = reinterpret_cast<float*>(pData);
             const int nbones = (int)rig.bones.size();
             for (int i = 0; i < nbones; i++) v11WeightList[i] = seq.weightlist[i];
             pData += sizeof(float) * nbones;
 
+            ALIGN2(pData);
             v11SeqDesc->iklockindex = SHORTOFFSET(pBase, pData);
 
+            ALIGN2(pData);
             v11SeqDesc->activitymodifierindex = SHORTOFFSET(pBase, pData);
             auto* v11Actmod = reinterpret_cast<anim::v11::mstudioactivitymodifier_t*>(pData);
             const int nactmods = (int)seq.actmods.size();
@@ -1206,6 +1212,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += sizeof(anim::v11::mstudioactivitymodifier_t) * v11SeqDesc->numactivitymodifiers;
 
+            ALIGN2(pData);
             std::vector<std::pair<int, int>> blends_index_map;
             v11SeqDesc->animindexindex = SHORTOFFSET(pBase, pData);
             auto* v11Blends = reinterpret_cast<uint16_t*>(pData);
@@ -1354,6 +1361,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     startframe += sectionframes;
                 }
 
+                ALIGN2(pData);
                 if (!anim.ikrules.empty()) {
                     v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
                     animDesc->numikrules   = static_cast<uint16_t>(anim.ikrules.size());
@@ -1433,6 +1441,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     }
                 }
 
+                ALIGN2(pData);
                 if ((anim.flags & r5::ANIM_FRAMEMOVEMENT) && anim.movement.sectionframes != 0) {
                     animDesc->framemovementindex = SHORTOFFSET(animDesc, pData);
                     auto* frameMovement = reinterpret_cast<anim::v7::mstudioframemovement_t*>(pData);
@@ -1472,9 +1481,12 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }
             }
 
-            for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++)
-                v11Blends[iter] = SHORTOFFSET(pBase, pBase + blends_index_map[seq.blends[iter]].second);
+            for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++) {
+                uintptr_t tmp = blends_index_map[seq.blends[iter]].second;
+                v11Blends[iter] = SHORTOFFSET(pBase, tmp);
+            }
 
+            ALIGN2(pData);
             v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
 
             pData = stringTables.Write(pData);
@@ -1489,8 +1501,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 seq.anims.clear();
             }
         }));
-        if (!g_EnableVerbose) bar.AddAndPrint();
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
-    printf("\n");
+    print("\n");
 }

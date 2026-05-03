@@ -1,6 +1,6 @@
 #include <pch.h>
 
-bool g_EnableVerbose = false;
+uint8_t g_VerboseLevel = 1;
 bool g_NoEntries = false;
 bool g_SkipEvents = false;
 bool g_NoPause = false;

@@ -1,6 +1,7 @@
 #pragma once
 
 void verbose(const char* format, ...);
+void print(const char* format, ...);
 
 class ProgressBar {
 public:

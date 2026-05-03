@@ -42,10 +42,9 @@ static int RunRseqMode(const std::string& input_path) {
 	}
 
 	for (auto& rig : rigs) {
-		/* PARSE */
-		{
+		/* PARSE */ {
 			if (rig.rsonpath.empty()) {
-				printf("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
+				print("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
 				continue;
 			}
 
@@ -62,7 +61,7 @@ static int RunRseqMode(const std::string& input_path) {
 
 				if (rig.rseqpaths.empty()) continue;
 				
-				printf("\Converting %s...\n", rig.name.c_str());
+				print("\Converting %s...\n", rig.name.c_str());
 			}
 			rig.sequences.reserve(rig.rseqpaths.size());
 
@@ -71,16 +70,10 @@ static int RunRseqMode(const std::string& input_path) {
 			}
 		}
 
-		/* WRITE */
-		{
+		/* WRITE */ {
 			/* WRITE RRIG */ {
-				if (std::filesystem::path(rig.name).extension() != ".rmdl") {
-					writer->second.rrig(in_dir + "/conv", rig);
-				}
-
-				if (rig.rseqpaths.empty()) {
-					continue;
-				}
+				if (std::filesystem::path(rig.name).extension() != ".rmdl") writer->second.rrig(in_dir + "/conv", rig);
+				if (rig.rseqpaths.empty()) continue;
 			}
 
 			/* WRITE RSEQ */ {
@@ -89,17 +82,17 @@ static int RunRseqMode(const std::string& input_path) {
 		}
 		rig.sequences.clear();
 	}
-	printf("\n");
+	print("\n");
 
 	/* PRINT REPAK ENTRIES */
-	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
+	if (!g_NoEntries) print("\n\nRePak Entries:\n");
 	for (auto& rig : rigs)  PrintRepakEntries(rig);
 	verbose("[+] Succeeded!\n");
 
 #ifdef _DEBUG
-	printf("Animation Data Compressed Types:\n");
+	print("Animation Data Compressed Types:\n");
 	for (int i = 0; i < 8; i++) {
-		printf("\t%d: %d\n", i, comptypes[i]);
+		print("\t%d: %d\n", i, comptypes[i]);
 	}
 #endif // _DEBUG
 
@@ -141,7 +134,7 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 	mdl_stream.close();
 
 	/* PARSE MDL */
-	printf("Parsing %s\n", file_path.filename().string().c_str());
+	print("Parsing %s\n", file_path.filename().string().c_str());
 	temp::rig_t rig;
 	switch (mdl_version) {
 	case 49:
@@ -156,13 +149,13 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 	}
 
 	/* WRITE RRIG/RSEQ */
-	printf("\n\nWriting %s\n", rig.name.c_str());
+	print("\n\nWriting %s\n", rig.name.c_str());
 	writer->second.rrig(output_dir, rig);
-	printf("Writing sequences\n");
+	print("Writing sequences\n");
 	writer->second.rseq(rig);
 
 	/* PRINT REPAK ENTRIES */
-	if (!g_NoEntries) printf("\n\nRePak Entries:\n");
+	if (!g_NoEntries) print("\n\nRePak Entries:\n");
 	PrintRepakEntries(rig);
 	verbose("[+] Succeeded!\n");
 	if (!g_NoPause) system("pause");
@@ -175,13 +168,13 @@ int main(int argc, char* argv[]) {
 	std::string override_rrig_path;
 
 	std::string usage = "Usage: \n" \
-		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose] [-ne] [-comperr <acceptable error>]\n" \
-		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-verbose] [-ne] [-comperr <acceptable error>]\n";
+		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-o <out season>] [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n" \
+		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n";
 
 	//**Options:**
 	//	- `-i <season>` - Input assets season(RSEQ mode only, range: 7–28, default: 28)
 	//  - `-o <season>` - Output assets season (range: 3 and 21, default: 3)
-	//	- `-verbose` - Enable verbose output
+	//	- `-verbose <level>` - Verbose output (0: No verbose, 1: Minimal, 2: Full verbose, default: 1)
 	//	- `-ne` - Suppress RePak entries output
 	//	- `-skipevents` - Skip events that may cause crashes
 	//	- `-nopause` - No pause at execution end
@@ -200,7 +193,7 @@ int main(int argc, char* argv[]) {
 		std::string arg = argv[i];
 		ARG_VAL("-i", g_in_season, "[!] Error: -i requires input assets season.\n");
 		ARG_VAL("-o", g_out_season, "[!] Error: -o requires output assets season.\n");
-		ARG_BOOL("-verbose", g_EnableVerbose);
+		ARG_INT("-verbose", g_VerboseLevel, "[!] Error: -verbose requires a number.\n");
 		ARG_BOOL("-ne", g_NoEntries);
 		ARG_BOOL("-skipevents", g_SkipEvents);
 		ARG_BOOL("-nopause", g_NoPause);

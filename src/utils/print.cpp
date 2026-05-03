@@ -3,7 +3,16 @@
 #include "print.h"
 
 void verbose(const char* format, ...) {
-    if (g_EnableVerbose) {
+    if (g_VerboseLevel >= 2) {
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
+}
+
+void print(const char* format, ...) {
+    if (g_VerboseLevel >= 1) {
         va_list args;
         va_start(args, format);
         vprintf(format, args);

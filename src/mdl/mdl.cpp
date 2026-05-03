@@ -112,7 +112,7 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 
 	// sequences
 	ProgressBar bar(pMdlHdr->numlocalseq);
-	if (!g_EnableVerbose && pMdlHdr->numlocalseq) bar.Print();
+	if ((g_VerboseLevel == 1) && pMdlHdr->numlocalseq) bar.Print();
 	rig.sequences.reserve(pMdlHdr->numlocalseq);
 	for (int seq_idx = 0; seq_idx < pMdlHdr->numlocalseq; seq_idx++) {
 		verbose("[%3d/%3d] ", seq_idx + 1, pMdlHdr->numlocalseq);
@@ -364,7 +364,7 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 
 			seq.anims.push_back(anim);
 		}
-		if (!g_EnableVerbose && pMdlHdr->numlocalseq) bar.AddAndPrint();
+		if ((g_VerboseLevel == 1) && pMdlHdr->numlocalseq) bar.AddAndPrint();
 		rig.sequences.push_back(seq);
 	}
 }
@@ -474,7 +474,7 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 
 	// sequences
 	ProgressBar bar(pMdlHdr->numlocalseq);
-	if (!g_EnableVerbose && pMdlHdr->numlocalseq) bar.Print();
+	if ((g_VerboseLevel == 1) && pMdlHdr->numlocalseq) bar.Print();
 	rig.sequences.reserve(pMdlHdr->numlocalseq);
 	for (int seq_idx = 0; seq_idx < pMdlHdr->numlocalseq; seq_idx++) {
 		verbose("[%3d/%3d] ", seq_idx + 1, pMdlHdr->numlocalseq);
@@ -811,7 +811,7 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 			}
 			seq.anims.push_back(anim);
 		}
-		if (!g_EnableVerbose && pMdlHdr->numlocalseq) bar.AddAndPrint();
+		if ((g_VerboseLevel == 1) && pMdlHdr->numlocalseq) bar.AddAndPrint();
 		rig.sequences.push_back(seq);
 	}
 }

@@ -390,6 +390,8 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
                 auto* pAnimDesc = PTR_FROM_IDX(anim::v11::mstudioanimdesc_t, pSeqDesc, animIndexes[anim_iter]);
 
+                if (uintptr_t(pAnimDesc) >= uintptr_t(pSeqDesc + OFFSET(pSeqDesc->szlabelindex))) continue;
+
                 temp::animdesc_t anim{};
                 anim.name      = STRING_FROM_IDX(pAnimDesc, OFFSET(pAnimDesc->sznameindex));
                 anim.fps       = pAnimDesc->fps;

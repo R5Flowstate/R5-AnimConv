@@ -1222,7 +1222,11 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             auto* v11Blends = reinterpret_cast<uint16_t*>(pData);
             pData += sizeof(uint16_t) * v11SeqDesc->numblends;
 
-            ALIGN2(pData);
+            std::vector<char> extn_buffer(8 * 1024 * 1024, 0);
+            char* pBaseExtn = extn_buffer.data();
+            char* pDataExtn = pBaseExtn;
+
+            ALIGN4(pData);
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
                 uint16_t blends_short = SHORTOFFSET(pBase, pData);
                 blends_index_map.push_back({ seq.blends[anim_iter], blends_short });
@@ -1486,9 +1490,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }
             }
 
-            for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++) {
+            for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++)
                 v11Blends[iter] = blends_index_map[seq.blends[iter]].second;
-            }
 
             ALIGN2(pData);
             v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
@@ -1496,9 +1499,16 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             pData = stringTables.Write(pData);
             ALIGN4(pData);
 
+            // write rseq
             std::filesystem::create_directories(std::filesystem::path(seq.outpath).parent_path());
             std::ofstream outRseq(seq.outpath, std::ios::out | std::ios::binary);
             outRseq.write(pBase, pData - pBase);
+
+            // write extn
+            if(pDataExtn - pBaseExtn) {
+                std::ofstream outRseqExtn(seq.outpath + "_extn", std::ios::out | std::ios::binary);
+                outRseqExtn.write(pBaseExtn, pDataExtn - pBaseExtn);
+            }
 
             {
                 std::lock_guard<std::mutex> lock(mutex);

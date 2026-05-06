@@ -39,7 +39,7 @@
 		((const char*)(target)-(const char*)(base)) : \
 		((((const char*)(target)-(const char*)(base)) >> 4) | 1) \
 		) \
-	); AssertMsg((((uintptr_t)target & 1) != 0), "SHORT_OFFSET_ERROR") \
+	); AssertMsg((((uintptr_t)target & 1) == 0), "SHORT_OFFSET_ERROR") \
 
 // ============================================================================
 //  Alignment Macros

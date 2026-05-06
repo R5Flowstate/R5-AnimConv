@@ -664,6 +664,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	stringTables.Add(pRigHdr, &pRigHdr->sznameindex, rig.name);
 	stringTables.Add(pRigHdr, &pRigHdr->surfacepropindex, rig.hdr.surfaceprop);
 
+	ALIGN2(pData);
 	pRigHdr->boneHdrOffset = SHORTOFFSET(pBase, pData);
 	auto* pBoneHdrs = reinterpret_cast<r5::v16::mstudiobonehdr_t*>(pData);
 	for (int i = 0; i < pRigHdr->boneCount; i++) {
@@ -678,6 +679,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += pRigHdr->boneCount * sizeof(r5::v16::mstudiobonehdr_t);
 
+	ALIGN2(pData);
 	pRigHdr->numhitboxsets = static_cast<uint8_t>(rig.hitboxsets.size());
 	pRigHdr->hitboxsetindex = SHORTOFFSET(pBase, pData);
 	auto* pHitboxsets = reinterpret_cast<r5::v16::mstudiohitboxset_t*>(pData);
@@ -702,14 +704,17 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 		}
 	}
 
+	ALIGN2(pData);
 	pRigHdr->bonetablebynameindex = SHORTOFFSET(pBase, pData);
 	char* pBonebynames = reinterpret_cast<char*>(pData);
 	memcpy_s(pBonebynames, 256, rig.bonebyname.data(), pRigHdr->boneCount);
 	pData += sizeof(char) * pRigHdr->boneCount;
 	ALIGN4(pData);
 
+	ALIGN2(pData);
 	pRigHdr->localattachmentindex = SHORTOFFSET(pBase, pData);
 
+	ALIGN2(pData);
 	pRigHdr->numlocalnodes = static_cast<uint16_t>(rig.nodes.size());
 	pRigHdr->localnodenameindex = SHORTOFFSET(pBase, pData);
 	auto* pNodenames = reinterpret_cast<uint16_t*>(pData);
@@ -718,6 +723,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
 
+	ALIGN2(pData);
 	pRigHdr->localNodeDataOffset = SHORTOFFSET(pBase, pData);
 	auto* pNodeDataIndex = reinterpret_cast<uint16_t*>(pData);
 	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
@@ -744,6 +750,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 		pData += sizeof(r5::v8::nodedata_t) * transitionsCount;
 	}
 
+	ALIGN2(pData);
 	pRigHdr->numlocalposeparameters = static_cast<uint16_t>(rig.poseparams.size());
 	pRigHdr->localposeparamindex = SHORTOFFSET(pBase, pData);
 	auto* pPoseparams = reinterpret_cast<r5::v16::mstudioposeparamdesc_t*>(pData);
@@ -756,6 +763,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += sizeof(r5::v16::mstudioposeparamdesc_t) * pRigHdr->numlocalposeparameters;
 
+	ALIGN2(pData);
 	pRigHdr->numikchains = static_cast<uint16_t>(rig.ikchains.size());
 	pRigHdr->ikchainindex = SHORTOFFSET(pBase, pData);
 	auto* pIkchains = reinterpret_cast<r5::v16::mstudioikchain_t*>(pData);

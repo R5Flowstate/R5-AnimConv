@@ -397,6 +397,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
+                anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -500,6 +501,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
+                anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -615,6 +617,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
+                anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -1089,8 +1092,7 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
 //  WriteRSEQ_v11
 // ============================================================================
 
-// TODO: add stallframes
-//       add _extn
+// TODO: add _extn
 
 void WriteRSEQ_v11(temp::rig_t& rig) {
     ProgressBar bar(rig.sequences.size());
@@ -1215,14 +1217,15 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             pData += sizeof(anim::v11::mstudioactivitymodifier_t) * v11SeqDesc->numactivitymodifiers;
 
             ALIGN2(pData);
-            std::vector<std::pair<int, int>> blends_index_map;
+            std::vector<std::pair<int, uint16_t>> blends_index_map;
             v11SeqDesc->animindexindex = SHORTOFFSET(pBase, pData);
             auto* v11Blends = reinterpret_cast<uint16_t*>(pData);
             pData += sizeof(uint16_t) * v11SeqDesc->numblends;
-            ALIGN2(pData);
 
+            ALIGN2(pData);
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
-                blends_index_map.push_back({ seq.blends[anim_iter], (int)(pData - pBase) });
+                uint16_t blends_short = SHORTOFFSET(pBase, pData);
+                blends_index_map.push_back({ seq.blends[anim_iter], blends_short });
                 temp::animdesc_t anim = seq.anims[anim_iter];
                 anim.SubtractBase(rig.bones.size(), rig, seq.IsAdditive());
 
@@ -1237,7 +1240,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 animDesc->numikrules          = static_cast<uint16_t>(anim.ikrules.size());
                 animDesc->sectionDataExternal = 0;
                 animDesc->unk1                = 0;
-                animDesc->sectionstallframes  = 0;
+                animDesc->sectionstallframes  = anim.sectionstallframes;
                 animDesc->sectionframes       = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(targetsectionframes) : 0;
                 animDesc->sectionindex        = 0;
                 animDesc->ikruleindex         = 0;
@@ -1484,8 +1487,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
 
             for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++) {
-                uintptr_t tmp = blends_index_map[seq.blends[iter]].second;
-                v11Blends[iter] = SHORTOFFSET(pBase, tmp);
+                v11Blends[iter] = blends_index_map[seq.blends[iter]].second;
             }
 
             ALIGN2(pData);

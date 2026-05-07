@@ -173,16 +173,16 @@ void ParseRSEQ_v71(std::string in_dir, temp::rig_t& rig) {
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
 
-                uint32_t num_sections = 1;
+                anim.numsections = 1;
                 anim::mstudioanimsections_t* animsections{};
                 if (pAnimDesc->sectionindex) {
-                    num_sections = GetSectionCount(*pAnimDesc);
+                    anim.numsections = GetSectionCount(*pAnimDesc);
                     animsections = PTR_FROM_IDX(anim::mstudioanimsections_t, pAnimDesc, pAnimDesc->sectionindex);
                 }
 
                 uint32_t sectionbaseframe = 0;
-                for (uint32_t section = 0; section < num_sections; section++) {
-                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+                for (uint32_t section = 0; section < anim.numsections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
                     char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                     if (pAnimDesc->sectionindex) {
@@ -290,16 +290,16 @@ void ParseRSEQ_v10(std::string in_dir, temp::rig_t& rig) {
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
 
-                uint32_t num_sections = 1;
+                anim.numsections = 1;
                 anim::mstudioanimsections_t* animsections{};
                 if (pAnimDesc->sectionindex) {
-                    num_sections = GetSectionCount(*pAnimDesc);
+                    anim.numsections = GetSectionCount(*pAnimDesc);
                     animsections = PTR_FROM_IDX(anim::mstudioanimsections_t, pAnimDesc, pAnimDesc->sectionindex);
                 }
 
                 uint32_t sectionbaseframe = 0;
-                for (uint32_t section = 0; section < num_sections; section++) {
-                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+                for (uint32_t section = 0; section < anim.numsections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
                     char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                     if (pAnimDesc->sectionindex) {
@@ -402,16 +402,16 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
 
-                uint32_t num_sections = 1;
+                anim.numsections = 1;
                 int32_t* animsections{};
                 if (pAnimDesc->sectionindex) {
-                    num_sections = GetSectionCount(*pAnimDesc);
+                    anim.numsections = GetSectionCount(*pAnimDesc);
                     animsections = reinterpret_cast<int32_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->sectionindex));
                 }
 
                 uint32_t sectionbaseframe = 0;
-                for (uint32_t section = 0; section < num_sections; section++) {
-                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+                for (uint32_t section = 0; section < anim.numsections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
                     char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                     if (pAnimDesc->sectionindex)
@@ -513,16 +513,16 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                         r5::DP::ParseFrameMovementsDP(pAnimDesc, anim);
                 }
                 else {
-                    uint32_t num_sections = 1;
+                    anim.numsections = 1;
                     int32_t* animsections{};
                     if (pAnimDesc->sectionindex) {
-                        num_sections = GetSectionCount(*pAnimDesc);
+                        anim.numsections = GetSectionCount(*pAnimDesc);
                         animsections = PTR_FROM_IDX(int32_t, pAnimDesc, pAnimDesc->sectionindex);
                     }
 
                     uint32_t sectionbaseframe = 0;
-                    for (uint32_t section = 0; section < num_sections; section++) {
-                        const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+                    for (uint32_t section = 0; section < anim.numsections; section++) {
+                        const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
                         char* pBFA = PTR_FROM_IDX(char, pAnimDesc, pAnimDesc->animindex);
                         if (pAnimDesc->sectionindex)
@@ -631,16 +631,16 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                         r5::DP::ParseFrameMovementsDP(pAnimDesc, anim);
                 }
                 else {
-                    uint32_t num_sections = 1;
+                    anim.numsections = 1;
                     int32_t* animsections{};
                     if (pAnimDesc->sectionindex) {
-                        num_sections = GetSectionCount(*pAnimDesc);
+                        anim.numsections = GetSectionCount(*pAnimDesc);
                         animsections = PTR_FROM_IDX(int32_t, pAnimDesc, pAnimDesc->sectionindex);
                     }
 
                     uint32_t sectionbaseframe = 0;
-                    for (uint32_t section = 0; section < num_sections; section++) {
-                        const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, num_sections);
+                    for (uint32_t section = 0; section < anim.numsections; section++) {
+                        const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
                         char* pBFA = reinterpret_cast<char*>(anim.asqd.buffer.data());
                         if (pAnimDesc->sectionindex && section) {
@@ -832,23 +832,23 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
 
                 if (!(anim.flags & ANIM_VALID)) continue;
 
-                uint32_t  numsections = 1;
+                anim.numsections = 1;
                 uint32_t* animsections{};
                 if (anim.numframes > targetsectionframes) {
                     animDesc->sectionindex = static_cast<int32_t>(pData - (char*)animDesc);
-                    numsections  = GetSectionCount(*animDesc);
+                    anim.numsections = GetSectionCount(*animDesc);
                     animsections = PTR_FROM_IDX(uint32_t, pData, 0);
-                    pData += sizeof(uint32_t) * numsections;
+                    pData += sizeof(uint32_t) * anim.numsections;
                 }
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
 
                 uint32_t startframe = 0;
-                for (uint32_t section = 0; section < numsections; section++) {
-                    const uint32_t sectionframes  = GetSectionLength(*animDesc, section, numsections);
-                    const bool     bInterpframe    = (section + 1 != numsections);
+                for (uint32_t section = 0; section < anim.numsections; section++) {
+                    const uint32_t sectionframes  = GetSectionLength(*animDesc, section, anim.numsections);
+                    const bool     bInterpframe    = (section + 1 != anim.numsections);
                     const uint32_t endframe        = startframe + sectionframes + bInterpframe;
 
-                    if (numsections > 1)
+                    if (anim.numsections > 1)
                         animsections[section] = static_cast<int32_t>(pData - (char*)animDesc);
 
                     const uint32_t bfa_size = ((rig.bones.size() + 3) / 2) & ~1u;
@@ -1092,8 +1092,6 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
 //  WriteRSEQ_v11
 // ============================================================================
 
-// TODO: add _extn
-
 void WriteRSEQ_v11(temp::rig_t& rig) {
     ProgressBar bar(rig.sequences.size());
     std::vector<std::future<void>> tasks;
@@ -1226,14 +1224,13 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             char* pBaseExtn = extn_buffer.data();
             char* pDataExtn = pBaseExtn;
 
+            constexpr uint32_t targetsectionframes = 61;
+
             ALIGN4(pData);
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
                 uint16_t blends_short = SHORTOFFSET(pBase, pData);
                 blends_index_map.push_back({ seq.blends[anim_iter], blends_short });
-                temp::animdesc_t anim = seq.anims[anim_iter];
-                anim.SubtractBase(rig.bones.size(), rig, seq.IsAdditive());
-
-                constexpr uint32_t targetsectionframes = 61;
+                auto& anim = seq.anims[anim_iter];
 
                 auto* animDesc = reinterpret_cast<anim::v11::mstudioanimdesc_t*>(pData);
                 stringTables.Add(animDesc, &animDesc->sznameindex, anim.name);
@@ -1252,32 +1249,55 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 pData += sizeof(anim::v11::mstudioanimdesc_t);
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
 
+                anim.pAnimDesc    = animDesc;
+                anim.pAnimSections = nullptr;
+                anim.numsections  = 1;
+
+                if (anim.flags & ANIM_VALID) {
+                    if (anim.numframes > (int)targetsectionframes) {
+                        animDesc->sectionindex = SHORTOFFSET(animDesc, pData);
+                        anim.numsections = GetSectionCount(*animDesc);
+                        anim.pAnimSections = reinterpret_cast<int32_t*>(pData);
+                        pData += sizeof(int32_t) * anim.numsections;
+                    }
+                    animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
+                }
+            }
+
+            ALIGN2(pData);
+            pData = stringTables.Write(pData);
+            ALIGN4(pData);
+
+            for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+                temp::animdesc_t anim = seq.anims[anim_iter];
+                anim.SubtractBase(rig.bones.size(), rig, seq.IsAdditive());
+                auto* animDesc = reinterpret_cast<anim::v11::mstudioanimdesc_t*>(anim.pAnimDesc);
+
                 if (!(anim.flags & ANIM_VALID)) continue;
 
-                uint32_t  numsections = 1;
-                int32_t*  animsections{};
-                if (anim.numframes > (int)targetsectionframes) {
-                    animDesc->sectionindex = SHORTOFFSET(animDesc, pData);
-                    numsections    = GetSectionCount(*animDesc);
-                    animsections   = reinterpret_cast<int32_t*>(pData);
-                    pData += sizeof(int32_t) * numsections;
-                }
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
 
                 uint32_t startframe = 0;
-                for (uint32_t section = 0; section < numsections; section++) {
-                    const uint32_t sectionframes = GetSectionLength(*animDesc, section, numsections);
-                    const bool     bInterpframe  = (section + 1 != numsections);
+                for (uint32_t section = 0; section < anim.numsections; section++) {
+                    const uint32_t sectionframes = GetSectionLength(*animDesc, section, anim.numsections);
+                    const bool     bInterpframe  = (section + 1 != anim.numsections);
                     const uint32_t endframe      = startframe + sectionframes + bInterpframe;
 
-                    if (numsections > 1)
-                        animsections[section] = static_cast<int32_t>(pData - (char*)animDesc);
+                    const bool bIsExtnSection = (anim.numframes >= 100) && (anim.numsections > 2) && (section != 0) && (section != (anim.numsections - 1));
+                    char*& pOut = bIsExtnSection ? pDataExtn : pData;
+
+                    if (anim.numsections > 1) {
+                        if (bIsExtnSection)
+                            anim.pAnimSections[section] = -1 - static_cast<int32_t>(pDataExtn - pBaseExtn);
+                        else
+                            anim.pAnimSections[section] = static_cast<int32_t>(pData - (char*)animDesc);
+                    }
 
                     const uint32_t bfa_size = ((rig.bones.size() + 3) / 2) & ~1u;
                     static thread_local std::vector<uint8_t> flaggedBones;
                     flaggedBones.assign(bfa_size * 2, 0);
-                    char* boneflagarray = reinterpret_cast<char*>(pData);
-                    pData += bfa_size;
+                    char* boneflagarray = reinterpret_cast<char*>(pOut);
+                    pOut += bfa_size;
 
                     for (int bone = 0; bone < nbones; bone++) {
                         auto& animData = anim.animdata[bone];
@@ -1293,8 +1313,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                         if (!bHasPosData && !bHasRotData && !bHasSclData) continue;
 
-                        auto* animRLE = reinterpret_cast<anim::mstudio_rle_anim_t*>(pData);
-                        pData += sizeof(anim::mstudio_rle_anim_t);
+                        auto* animRLE = reinterpret_cast<anim::mstudio_rle_anim_t*>(pOut);
+                        pOut += sizeof(anim::mstudio_rle_anim_t);
 
                         anim::studioanimvalue_ptr_t* animposptr{};
                         anim::studioanimvalue_ptr_t* animrotptr{};
@@ -1311,15 +1331,15 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                             if (bRawpos) {
                                 Vector3 val = animData.pos[startframe];
                                 if (!seq.IsAdditive()) val += rig.bones[bone].pos;
-                                *(Vector48*)pData = Pack48(val);
-                                pData += sizeof(Vector48);
+                                *(Vector48*)pOut = Pack48(val);
+                                pOut += sizeof(Vector48);
                             }
                             else {
                                 animRLE->bAnimPosition = true;
-                                *(float*)pData = posscale;
-                                pData += sizeof(float);
-                                animposptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
-                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                                *(float*)pOut = posscale;
+                                pOut += sizeof(float);
+                                animposptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pOut);
+                                pOut += sizeof(anim::studioanimvalue_ptr_t);
                             }
                         }
 
@@ -1328,13 +1348,13 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                             if (bRawrot) {
                                 Quaternion q{};
                                 AngleQuaternion(animData.rot[startframe], q);
-                                *(Quaternion64*)pData = PackQuat64(q);
-                                pData += sizeof(Quaternion64);
+                                *(Quaternion64*)pOut = PackQuat64(q);
+                                pOut += sizeof(Quaternion64);
                             }
                             else {
                                 animRLE->bAnimRotation = true;
-                                animrotptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
-                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                                animrotptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pOut);
+                                pOut += sizeof(anim::studioanimvalue_ptr_t);
                             }
                         }
 
@@ -1343,21 +1363,21 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                             if (bRawscl) {
                                 Vector3 val = animData.scl[startframe];
                                 if (!seq.IsAdditive()) val += rig.bones[bone].scl;
-                                *(Vector48*)pData = Pack48(val);
-                                pData += sizeof(Vector48);
+                                *(Vector48*)pOut = Pack48(val);
+                                pOut += sizeof(Vector48);
                             }
                             else {
                                 animRLE->bAnimScale = true;
-                                animsclptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pData);
-                                pData += sizeof(anim::studioanimvalue_ptr_t);
+                                animsclptr = reinterpret_cast<anim::studioanimvalue_ptr_t*>(pOut);
+                                pOut += sizeof(anim::studioanimvalue_ptr_t);
                             }
                         }
 
-                        if (bHasPosData && !bRawpos) WriteAnim(pData, animposptr, animData.pos, startframe, endframe, posscale);
-                        if (bHasRotData && !bRawrot) WriteAnim(pData, animrotptr, animData.rot, startframe, endframe, 0.00019175345f);
-                        if (bHasSclData && !bRawscl) WriteAnim(pData, animsclptr, animData.scl, startframe, endframe, 0.0030518509f);
+                        if (bHasPosData && !bRawpos) WriteAnim(pOut, animposptr, animData.pos, startframe, endframe, posscale);
+                        if (bHasRotData && !bRawrot) WriteAnim(pOut, animrotptr, animData.rot, startframe, endframe, 0.00019175345f);
+                        if (bHasSclData && !bRawscl) WriteAnim(pOut, animsclptr, animData.scl, startframe, endframe, 0.0030518509f);
 
-                        animRLE->size = (int)(pData - (char*)animRLE);
+                        animRLE->size = (int)(pOut - (char*)animRLE);
                         flaggedBones[bone] = boneFlags;
 
                         const int bfahalf = (int)(flaggedBones.size() / 2);
@@ -1366,7 +1386,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                             boneflagarray[i] |= flaggedBones[i * 2 + 1] << 4;
                         }
                     }
-                    ALIGN4(pData);
+                    ALIGN4(pOut);
                     startframe += sectionframes;
                 }
 
@@ -1495,8 +1515,6 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
             ALIGN2(pData);
             v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
-
-            pData = stringTables.Write(pData);
             ALIGN4(pData);
 
             // write rseq

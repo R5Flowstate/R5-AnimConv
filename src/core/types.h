@@ -131,6 +131,10 @@ namespace temp {
 		int32_t numframes = 0;
 		int32_t sectionstallframes = 0;
 		int32_t sectionframes = 0;
+		uint32_t numsections = 1; // This will be replaced a new value by Write function
+
+		void* pAnimDesc = nullptr;
+		int32_t* pAnimSections = nullptr;
 
 		file_t asqd{};
 

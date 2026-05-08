@@ -1,6 +1,8 @@
 #include <pch.h>
 #include <rseq/rseq.h>
 
+extern std::string g_Outpath;
+
 using namespace r5;
 
 static temp::file_t LoadFile(const std::string& path) {
@@ -24,7 +26,7 @@ static std::string BuildOutputPath(const std::string& in_dir, const std::filesys
     auto it = relative_path.begin();
     std::filesystem::path newPath = it->string();
     for (++it; it != relative_path.end(); ++it) newPath /= *it;
-    return in_dir + "\\conv\\" + newPath.string();
+    return (g_Outpath.empty() ? in_dir + "\\conv\\" : g_Outpath + "\\") + newPath.string();
 }
 
 template<typename TSeqDesc>
@@ -866,7 +868,7 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
                         const bool bRawscl = allEqualVector(animData.scl, startframe, endframe);
 
                         const bool bHasPosData = !bRawpos || !animData.pos[startframe].approx_equal({0,0,0});
-                        const bool bHasRotData = !bRawrot || !animData.rot[startframe].approx_equal(rig.bones[bone].rot);
+                        const bool bHasRotData = !bRawrot || !(seq.IsAdditive() ? animData.rot[startframe].approx_equal({ 0,0,0 }) : animData.rot[startframe].approx_equal(rig.bones[bone].rot));
                         const bool bHasSclData = !bRawscl || !animData.scl[startframe].approx_equal({0,0,0});
 
                         if (!bHasPosData && !bHasRotData && !bHasSclData) continue;
@@ -1283,7 +1285,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     const bool     bInterpframe  = (section + 1 != anim.numsections);
                     const uint32_t endframe      = startframe + sectionframes + bInterpframe;
 
-                    const bool bIsExtnSection = (anim.numframes >= 100) && (anim.numsections > 2) && (section != 0) && (section != (anim.numsections - 1));
+                    const bool bIsExtnSection = (anim.numframes >= 96) && (anim.numsections > 2) && (section != 0) && (section != (anim.numsections - 1));
                     char*& pOut = bIsExtnSection ? pDataExtn : pData;
 
                     if (anim.numsections > 1) {
@@ -1308,7 +1310,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                         const bool bRawscl = allEqualVector(animData.scl, startframe, endframe);
 
                         const bool bHasPosData = !bRawpos || !animData.pos[startframe].approx_equal({0,0,0});
-                        const bool bHasRotData = !bRawrot || !animData.rot[startframe].approx_equal(rig.bones[bone].rot);
+                        const bool bHasRotData = !bRawrot || !(seq.IsAdditive() ? animData.rot[startframe].approx_equal({0,0,0}) : animData.rot[startframe].approx_equal(rig.bones[bone].rot));
                         const bool bHasSclData = !bRawscl || !animData.scl[startframe].approx_equal({0,0,0});
 
                         if (!bHasPosData && !bHasRotData && !bHasSclData) continue;

@@ -563,7 +563,7 @@ void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 
 			int df5 = 0;
 			for (int k = 0; k < nodedata.seq; k++)
-				if (rig.rseqpaths[k] == "df5") 
+				if (k < rig.rseqpaths.size() && rig.rseqpaths[k] == "df5")
 					df5++;
 
 			pNodeData[j].tonode = nodedata.tonode;
@@ -741,7 +741,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 
 			int df5 = 0;
 			for (int k = 0; k < nodedata.seq; k++)
-				if (rig.rseqpaths[k] == "df5")
+				if (k < rig.rseqpaths.size() && rig.rseqpaths[k] == "df5")
 					df5++;
 
 			pNodeData[j].tonode = nodedata.tonode;

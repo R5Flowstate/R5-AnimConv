@@ -9,6 +9,7 @@
 
 std::string g_in_season = "28";
 std::string g_out_season = "3";
+std::string g_Outpath;
 
 static int RunRseqMode(const std::string& input_path) {
 	auto parser = Parsers.find(g_in_season);
@@ -43,11 +44,6 @@ static int RunRseqMode(const std::string& input_path) {
 
 	for (auto& rig : rigs) {
 		/* PARSE */ {
-			if (rig.rsonpath.empty()) {
-				print("[!] Skipping: no .rson was founded for %s\n", rig.rrigpath.c_str());
-				continue;
-			}
-
 			/* PARSE RRIG */ {
 				uint32_t rigFileSize = (uint32_t)std::filesystem::file_size(rig.rrigpath);
 				std::ifstream rrig_stream(rig.rrigpath, std::ios::binary);
@@ -59,8 +55,6 @@ static int RunRseqMode(const std::string& input_path) {
 				parser->second.rrig(buffer.data(), rig);
 				std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
 
-				if (rig.rseqpaths.empty()) continue;
-				
 				print("\Converting %s...\n", rig.name.c_str());
 			}
 			rig.sequences.reserve(rig.rseqpaths.size());
@@ -72,7 +66,7 @@ static int RunRseqMode(const std::string& input_path) {
 
 		/* WRITE */ {
 			/* WRITE RRIG */ {
-				if (std::filesystem::path(rig.name).extension() != ".rmdl") writer->second.rrig(in_dir + "/conv", rig);
+				if (std::filesystem::path(rig.name).extension() != ".rmdl") writer->second.rrig(g_Outpath.empty() ? in_dir + "/conv" : g_Outpath, rig);
 				if (rig.rseqpaths.empty()) continue;
 			}
 
@@ -109,7 +103,7 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 
 	std::ifstream mdl_stream(input_mdl, std::ios::binary);
 	std::filesystem::path file_path = std::filesystem::absolute(input_mdl);
-	std::string output_dir = file_path.parent_path().string();
+	std::string output_dir = g_Outpath.empty() ? file_path.parent_path().string() : g_Outpath;
 	verbose("Reading: %s...\n", input_mdl.c_str());
 
 	if (!std::filesystem::exists(input_mdl)) {
@@ -172,13 +166,14 @@ int main(int argc, char* argv[]) {
 		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n";
 
 	//**Options:**
-	//	- `-i <season>` - Input assets season(RSEQ mode only, range: 7–28, default: 28)
+	//	- `-i <season>` - Input assets season(RSEQ mode only, range: 7-28, default: 28)
 	//  - `-o <season>` - Output assets season (range: 3 and 21, default: 3)
+	//  - `-outpath <path>` - Output directory (default: .\conv\)
 	//	- `-verbose <level>` - Verbose output (0: No verbose, 1: Minimal, 2: Full verbose, default: 1)
 	//	- `-ne` - Suppress RePak entries output
 	//	- `-skipevents` - Skip events that may cause crashes
 	//	- `-nopause` - No pause at execution end
-	//	- `-comperr <float>` - Compression error threshold(0.5–2.0 recommended, 0.0 lossless, default: 1.0)
+	//	- `-comperr <float>` - Compression error threshold(0.5-2.0 recommended, 0.0 lossless, default: 1.0)
 	//	- `-rp <path>` - Override internal rrig path(MDL mode only)
 	//	- `-sp <path>` - Override internal rseq path(MDL mode only)
 
@@ -193,6 +188,7 @@ int main(int argc, char* argv[]) {
 		std::string arg = argv[i];
 		ARG_VAL("-i", g_in_season, "[!] Error: -i requires input assets season.\n");
 		ARG_VAL("-o", g_out_season, "[!] Error: -o requires output assets season.\n");
+		ARG_VAL("-outpath", g_Outpath, "[!] Error: -outpath requires a path.\n");
 		ARG_INT("-verbose", g_VerboseLevel, "[!] Error: -verbose requires a number.\n");
 		ARG_BOOL("-ne", g_NoEntries);
 		ARG_BOOL("-skipevents", g_SkipEvents);

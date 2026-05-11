@@ -162,8 +162,8 @@ int main(int argc, char* argv[]) {
 	std::string override_rrig_path;
 
 	std::string usage = "Usage: \n" \
-		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-o <out season>] [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n" \
-		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n";
+		"  Mdl  mode : R5-AnimConv.exe <model.mdl> [-o <out season>] [-outpath <path>] [-rp <override_rrig_path>] [-sp <override_rseq_path>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n" \
+		"  Rseq mode : R5-AnimConv.exe <parent directory> [-i <in season>] [-o <out season>] [-outpath <path>] [-verbose <level>] [-ne] [-comperr <acceptable error>]\n";
 
 	//**Options:**
 	//	- `-i <season>` - Input assets season(RSEQ mode only, range: 7-28, default: 28)

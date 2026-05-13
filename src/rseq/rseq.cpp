@@ -1265,10 +1265,12 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
                 }
             }
+            ALIGN2(pData);
+            v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
 
             ALIGN2(pData);
             pData = stringTables.Write(pData);
-            ALIGN4(pData);
+            ALIGN16(pData);
 
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
                 temp::animdesc_t anim = seq.anims[anim_iter];
@@ -1276,6 +1278,85 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 auto* animDesc = reinterpret_cast<anim::v11::mstudioanimdesc_t*>(anim.pAnimDesc);
 
                 if (!(anim.flags & ANIM_VALID)) continue;
+
+                ALIGN2(pData);
+                if (!anim.ikrules.empty()) {
+                    v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
+                    animDesc->numikrules = static_cast<uint16_t>(anim.ikrules.size());
+                    animDesc->ikruleindex = SHORTOFFSET(animDesc, pData);
+                    auto* v11Ikrule = reinterpret_cast<anim::v11::mstudioikrule_t*>(pData);
+
+                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
+                        const temp::ikrule_t& ikrule = anim.ikrules[i];
+                        v11Ikrule[i].chain = static_cast<short>(ikrule.chain);
+                        v11Ikrule[i].bone = static_cast<short>(ikrule.bone);
+                        v11Ikrule[i].type = static_cast<char>(ikrule.type);
+                        v11Ikrule[i].slot = static_cast<char>(ikrule.slot);
+                        v11Ikrule[i].sectionframes = static_cast<uint16_t>(ikrule.sectionframes);
+                        for (int j = 0; j < 6; j++) v11Ikrule[i].scale[j] = ikrule.scale[j];
+                        v11Ikrule[i].compressedikerrorindex = 0;
+                        v11Ikrule[i].iStart = static_cast<short>(ikrule.iStart);
+                        v11Ikrule[i].ikerrorindex = 0;
+                        v11Ikrule[i].szattachmentindex = 0;
+                        v11Ikrule[i].start = ikrule.start;
+                        v11Ikrule[i].peak = ikrule.peak;
+                        v11Ikrule[i].tail = ikrule.tail;
+                        v11Ikrule[i].end = ikrule.end;
+                        v11Ikrule[i].contact = ikrule.contact;
+                        v11Ikrule[i].drop = ikrule.drop;
+                        v11Ikrule[i].top = ikrule.top;
+                        v11Ikrule[i].height = ikrule.height;
+                        v11Ikrule[i].endHeight = ikrule.endHeight;
+                        v11Ikrule[i].radius = ikrule.radius;
+                        v11Ikrule[i].floor = ikrule.floor;
+                        v11Ikrule[i].pos = ikrule.pos;
+                        v11Ikrule[i].q = ikrule.q;
+                        if (!ikrule.attachmentname.empty())
+                            stringTables.Add(&v11Ikrule[i], &v11Ikrule[i].szattachmentindex, ikrule.attachmentname);
+                        pData += sizeof(anim::v11::mstudioikrule_t);
+                    }
+
+                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
+                        const temp::ikrule_t& ikrule = anim.ikrules[i];
+                        v11Ikrule[i].compressedikerrorindex = SHORTOFFSET(&v11Ikrule[i], pData);
+                        if (!ikrule.sectionframes) continue;
+
+                        const int32_t sectioncount = static_cast<int32_t>((float)(anim.numframes - 1) / (float)ikrule.sectionframes) + 1;
+                        auto* sectionindices = reinterpret_cast<uint16_t*>(pData);
+                        pData += sizeof(uint16_t) * sectioncount;
+
+                        Vector3 mn{}, mx{}, mn1{}, mx1{};
+                        findMinMaxSIMD(ikrule.ikruledata.pos, 0, anim.numframes, mn, mx);
+                        findMinMaxSIMD(ikrule.ikruledata.rot, 0, anim.numframes, mn1, mx1);
+                        for (int j = 0; j < 6; j++) {
+                            const float v1 = (j < 3)
+                                ? std::max({ std::fabs(mx[j]),    std::fabs(mn[j]) })
+                                : std::max({ std::fabs(mx1[j - 3]), std::fabs(mn1[j - 3]) });
+                            if (v1 > 127.f) v11Ikrule[i].scale[j] = (v1 * 2.f) / 65534.f;
+                        }
+
+                        uint32_t ikstartframe = 0;
+                        for (int section = 0; section < sectioncount; section++) {
+                            sectionindices[section] = SHORTOFFSET(&v11Ikrule[i], pData);
+                            const int sectionframes = GetSectionLength(anim.numframes, ikrule.sectionframes, section);
+                            const uint32_t framerange = sectionframes + !(section + 1 == sectioncount);
+                            const uint32_t endframe = ikstartframe + framerange;
+
+                            auto* offsets = reinterpret_cast<int16_t*>(pData);
+                            pData += 6 * sizeof(int16_t);
+
+                            for (int idx = 0; idx < 3; idx++) {
+                                offsets[idx] = static_cast<int16_t>(pData - (char*)offsets);
+                                WriteAnimData(pData, ikrule.ikruledata.pos, ikstartframe, endframe, idx, ikrule.scale[idx]);
+                            }
+                            for (int idx = 0; idx < 3; idx++) {
+                                offsets[idx + 3] = static_cast<int16_t>(pData - (char*)offsets);
+                                WriteAnimData(pData, ikrule.ikruledata.rot, ikstartframe, endframe, idx, ikrule.scale[idx + 3]);
+                            }
+                            ikstartframe += sectionframes;
+                        }
+                    }
+                }
 
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
 
@@ -1393,86 +1474,6 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }
 
                 ALIGN2(pData);
-                if (!anim.ikrules.empty()) {
-                    v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
-                    animDesc->numikrules   = static_cast<uint16_t>(anim.ikrules.size());
-                    animDesc->ikruleindex  = SHORTOFFSET(animDesc, pData);
-                    auto* v11Ikrule        = reinterpret_cast<anim::v11::mstudioikrule_t*>(pData);
-
-                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
-                        const temp::ikrule_t& ikrule = anim.ikrules[i];
-                        v11Ikrule[i].chain        = static_cast<short>(ikrule.chain);
-                        v11Ikrule[i].bone         = static_cast<short>(ikrule.bone);
-                        v11Ikrule[i].type         = static_cast<char>(ikrule.type);
-                        v11Ikrule[i].slot         = static_cast<char>(ikrule.slot);
-                        v11Ikrule[i].sectionframes = static_cast<uint16_t>(ikrule.sectionframes);
-                        for (int j = 0; j < 6; j++) v11Ikrule[i].scale[j] = ikrule.scale[j];
-                        v11Ikrule[i].compressedikerrorindex = 0;
-                        v11Ikrule[i].iStart        = static_cast<short>(ikrule.iStart);
-                        v11Ikrule[i].ikerrorindex  = 0;
-                        v11Ikrule[i].szattachmentindex = 0;
-                        v11Ikrule[i].start         = ikrule.start;
-                        v11Ikrule[i].peak          = ikrule.peak;
-                        v11Ikrule[i].tail          = ikrule.tail;
-                        v11Ikrule[i].end           = ikrule.end;
-                        v11Ikrule[i].contact       = ikrule.contact;
-                        v11Ikrule[i].drop          = ikrule.drop;
-                        v11Ikrule[i].top           = ikrule.top;
-                        v11Ikrule[i].height        = ikrule.height;
-                        v11Ikrule[i].endHeight     = ikrule.endHeight;
-                        v11Ikrule[i].radius        = ikrule.radius;
-                        v11Ikrule[i].floor         = ikrule.floor;
-                        v11Ikrule[i].pos           = ikrule.pos;
-                        v11Ikrule[i].q             = ikrule.q;
-                        if (!ikrule.attachmentname.empty())
-                            stringTables.Add(&v11Ikrule[i], &v11Ikrule[i].szattachmentindex, ikrule.attachmentname);
-                        pData += sizeof(anim::v11::mstudioikrule_t);
-                    }
-
-                    for (int i = 0; i < (int)anim.ikrules.size(); i++) {
-                        const temp::ikrule_t& ikrule = anim.ikrules[i];
-                        if (!ikrule.sectionframes) continue;
-
-                        v11Ikrule[i].compressedikerrorindex = SHORTOFFSET(&v11Ikrule[i], pData);
-
-                        const int32_t sectioncount = static_cast<int32_t>((float)(anim.numframes - 1) / (float)ikrule.sectionframes) + 1;
-                        auto* sectionindices = reinterpret_cast<uint16_t*>(pData);
-                        pData += sizeof(uint16_t) * sectioncount;
-
-                        Vector3 mn{}, mx{}, mn1{}, mx1{};
-                        findMinMaxSIMD(ikrule.ikruledata.pos, 0, anim.numframes, mn, mx);
-                        findMinMaxSIMD(ikrule.ikruledata.rot, 0, anim.numframes, mn1, mx1);
-                        for (int j = 0; j < 6; j++) {
-                            const float v1 = (j < 3)
-                                ? std::max({ std::fabs(mx[j]),    std::fabs(mn[j]) })
-                                : std::max({ std::fabs(mx1[j-3]), std::fabs(mn1[j-3]) });
-                            if (v1 > 127.f) v11Ikrule[i].scale[j] = (v1 * 2.f) / 65534.f;
-                        }
-
-                        uint32_t ikstartframe = 0;
-                        for (int section = 0; section < sectioncount; section++) {
-                            sectionindices[section] = SHORTOFFSET(&v11Ikrule[i], pData);
-                            const int sectionframes = GetSectionLength(anim.numframes, ikrule.sectionframes, section);
-                            const uint32_t framerange = sectionframes + !(section + 1 == sectioncount);
-                            const uint32_t endframe   = ikstartframe + framerange;
-
-                            auto* offsets = reinterpret_cast<int16_t*>(pData);
-                            pData += 6 * sizeof(int16_t);
-
-                            for (int idx = 0; idx < 3; idx++) {
-                                offsets[idx] = static_cast<int16_t>(pData - (char*)offsets);
-                                WriteAnimData(pData, ikrule.ikruledata.pos, ikstartframe, endframe, idx, ikrule.scale[idx]);
-                            }
-                            for (int idx = 0; idx < 3; idx++) {
-                                offsets[idx + 3] = static_cast<int16_t>(pData - (char*)offsets);
-                                WriteAnimData(pData, ikrule.ikruledata.rot, ikstartframe, endframe, idx, ikrule.scale[idx + 3]);
-                            }
-                            ikstartframe += sectionframes;
-                        }
-                    }
-                }
-
-                ALIGN2(pData);
                 if ((anim.flags & r5::ANIM_FRAMEMOVEMENT) && anim.movement.sectionframes != 0) {
                     animDesc->framemovementindex = SHORTOFFSET(animDesc, pData);
                     auto* frameMovement = reinterpret_cast<anim::v7::mstudioframemovement_t*>(pData);
@@ -1515,8 +1516,6 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             for (int iter = 0; iter < (int)v11SeqDesc->numblends; iter++)
                 v11Blends[iter] = blends_index_map[seq.blends[iter]].second;
 
-            ALIGN2(pData);
-            v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
             ALIGN4(pData);
 
             // write rseq

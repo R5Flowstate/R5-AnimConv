@@ -129,7 +129,7 @@ namespace temp {
 		float fps = 0;
 		int32_t flags = 0;
 		int32_t numframes = 0;
-		int32_t sectionstallframes = 0;
+		int32_t sectionstallframes = 16;
 		int32_t sectionframes = 0;
 		uint32_t numsections = 1; // This will be replaced a new value by Write function
 

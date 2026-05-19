@@ -23,9 +23,7 @@ namespace temp {
 
 		void Init() {
 			entries.clear();
-			entries.emplace_back(Entry{ nullptr, nullptr, nullptr, "", -1 });
 			dedup.clear();
-			dedup.emplace("", 0);
 		}
 
 		template<typename T>
@@ -43,8 +41,32 @@ namespace temp {
 		}
 
 		char* Write(char* pData) {
+			char* nullAddr = nullptr;
+
+			auto getOrWriteNull = [&]() -> char* {
+				if (!nullAddr) {
+					if constexpr (std::is_same_v<TPtrType, uint16_t>) { ALIGN2(pData); }
+					nullAddr = pData;
+					*pData++ = '\0';
+				}
+				return nullAddr;
+			};
+
 			for (auto& it : entries) {
 				if (it.dupindex == -1) {
+					if (it.str.empty()) {
+						it.addr = getOrWriteNull();
+						if (it.ptr) {
+							if constexpr (std::is_same_v<TPtrType, int> || std::is_same_v<TPtrType, int32_t>) {
+								*it.ptr = static_cast<TPtrType>(it.addr - it.base);
+							}
+							else if constexpr (std::is_same_v<TPtrType, uint16_t>) {
+								EncodeShortOffset(it.base, it.addr, *it.ptr);
+							}
+						}
+						continue;
+					}
+
 					if (it.ptr) {
 						if constexpr (std::is_same_v<TPtrType, int> || std::is_same_v<TPtrType, int32_t>) {
 							*it.ptr = static_cast<TPtrType>(pData - it.base);
@@ -62,8 +84,7 @@ namespace temp {
 						strcpy_s(pData, length + 1, it.str.c_str());
 						pData += length;
 					}
-					*pData = '\0';
-					pData++;
+					*pData++ = '\0';
 				}
 				else {
 					if (it.ptr) {

@@ -106,7 +106,7 @@ inline float DecodeQuat64(uint64_t v1) {
 }
 
 inline uint64_t EncodeQuat64(float v1) {
-	return std::clamp(static_cast<int>(lroundf(v1 * 1048576.f)) + 1048576, 0, 2097151);
+	return std::clamp(static_cast<int>(v1 * 1048576.f) + 1048576, 0, 2097151);
 }
 
 // ============================================================================

@@ -664,8 +664,8 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	stringTables.Add(pRigHdr, &pRigHdr->sznameindex, rig.name);
 	stringTables.Add(pRigHdr, &pRigHdr->surfacepropindex, rig.hdr.surfaceprop);
 
-	ALIGN2(pData);
-	pRigHdr->boneHdrOffset = SHORTOFFSET(pBase, pData);
+	// BoneHdrs
+	pData = EmitShortOffset(pData, pBase, pRigHdr->boneHdrOffset);
 	auto* pBoneHdrs = reinterpret_cast<r5::v16::mstudiobonehdr_t*>(pData);
 	for (int i = 0; i < pRigHdr->boneCount; i++) {
 		auto& bone = rig.bones[i];
@@ -679,9 +679,9 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += pRigHdr->boneCount * sizeof(r5::v16::mstudiobonehdr_t);
 
-	ALIGN2(pData);
+	// Hitboxsets
 	pRigHdr->numhitboxsets = static_cast<uint8_t>(rig.hitboxsets.size());
-	pRigHdr->hitboxsetindex = SHORTOFFSET(pBase, pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->hitboxsetindex);
 	auto* pHitboxsets = reinterpret_cast<r5::v16::mstudiohitboxset_t*>(pData);
 	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
 		stringTables.Add(&pHitboxsets[i], &pHitboxsets[i].sznameindex, rig.hitboxsets[i].name);
@@ -690,8 +690,8 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 
 	for (int i = 0; i < pRigHdr->numhitboxsets; i++) {
+		pData = EmitShortOffset(pData, &pHitboxsets[i], pHitboxsets[i].hitboxindex);
 		auto* pHitboxes = reinterpret_cast<r5::v16::mstudiobbox_t*>(pData);
-		pHitboxsets[i].hitboxindex = SHORTOFFSET(&pHitboxsets[i], pData);
 		for (int j = 0; j < pHitboxsets[i].numhitboxes; j++) {
 			auto& hitbox = rig.hitboxsets[i].hitboxes[j];
 			stringTables.Add(&pHitboxes[j], &pHitboxes[j].szhitboxnameindex, hitbox.name);
@@ -704,32 +704,32 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 		}
 	}
 
-	ALIGN2(pData);
-	pRigHdr->bonetablebynameindex = SHORTOFFSET(pBase, pData);
+	// Bonebynames
+	pData = EmitShortOffset(pData, pBase, pRigHdr->bonetablebynameindex);
 	char* pBonebynames = reinterpret_cast<char*>(pData);
 	memcpy_s(pBonebynames, 256, rig.bonebyname.data(), pRigHdr->boneCount);
 	pData += sizeof(char) * pRigHdr->boneCount;
 	ALIGN4(pData);
 
-	ALIGN2(pData);
-	pRigHdr->localattachmentindex = SHORTOFFSET(pBase, pData);
+	// Attachments
+	pData = EmitShortOffset(pData, pBase, pRigHdr->localattachmentindex);
 
-	ALIGN2(pData);
+	// Nodenames
 	pRigHdr->numlocalnodes = static_cast<uint16_t>(rig.nodes.size());
-	pRigHdr->localnodenameindex = SHORTOFFSET(pBase, pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->localnodenameindex);
 	auto* pNodenames = reinterpret_cast<uint16_t*>(pData);
 	for (int i = 0; i < pRigHdr->numlocalnodes; i++) {
 		stringTables.Add(pNodenames, &pNodenames[i], rig.nodes[i].name);
 	}
 	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
 
-	ALIGN2(pData);
-	pRigHdr->localNodeDataOffset = SHORTOFFSET(pBase, pData);
+	// Nodes
+	pData = EmitShortOffset(pData, pBase, pRigHdr->localNodeDataOffset);
 	auto* pNodeDataIndex = reinterpret_cast<uint16_t*>(pData);
 	pData += sizeof(uint16_t) * pRigHdr->numlocalnodes;
 
 	for (int i = 0; i < pRigHdr->numlocalnodes; i++) {
-		pNodeDataIndex[i] = SHORTOFFSET(pNodeDataIndex, pData);
+		pData = EmitShortOffset(pData, pNodeDataIndex, pNodeDataIndex[i]);
 		uint16_t transitionsCount = static_cast<uint16_t>(rig.nodes[i].nodedatas.size());
 		auto* pNodeCount = reinterpret_cast<uint16_t*>(pData);
 		*pNodeCount = transitionsCount;
@@ -750,9 +750,9 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 		pData += sizeof(r5::v8::nodedata_t) * transitionsCount;
 	}
 
-	ALIGN2(pData);
+	// Pose parameters
 	pRigHdr->numlocalposeparameters = static_cast<uint16_t>(rig.poseparams.size());
-	pRigHdr->localposeparamindex = SHORTOFFSET(pBase, pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->localposeparamindex);
 	auto* pPoseparams = reinterpret_cast<r5::v16::mstudioposeparamdesc_t*>(pData);
 	for (int i = 0; i < pRigHdr->numlocalposeparameters; i++) {
 		stringTables.Add(&pPoseparams[i], &pPoseparams[i].sznameindex, rig.poseparams[i].name);
@@ -763,9 +763,9 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += sizeof(r5::v16::mstudioposeparamdesc_t) * pRigHdr->numlocalposeparameters;
 
-	ALIGN2(pData);
+	// IK chains
 	pRigHdr->numikchains = static_cast<uint16_t>(rig.ikchains.size());
-	pRigHdr->ikchainindex = SHORTOFFSET(pBase, pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->ikchainindex);
 	auto* pIkchains = reinterpret_cast<r5::v16::mstudioikchain_t*>(pData);
 	for (int i = 0; i < pRigHdr->numikchains; i++) {
 		stringTables.Add(&pIkchains[i], &pIkchains[i].sznameindex, rig.ikchains[i].name);
@@ -775,8 +775,9 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += sizeof(r5::v16::mstudioikchain_t) * pRigHdr->numikchains;
 
+	// IK links
 	for (int i = 0; i < pRigHdr->numikchains; i++) {
-		pIkchains[i].linkindex = SHORTOFFSET(&pIkchains[i], pData);
+		pData = EmitShortOffset(pData, &pIkchains[i], pIkchains[i].linkindex);
 		auto* pIklinks = reinterpret_cast<r5::v8::mstudioiklink_t*>(pData);
 		for (int j = 0; j < pIkchains[i].numlinks; j++) {
 			auto& iklink = rig.ikchains[i].iklinks[j];
@@ -789,7 +790,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	pData = stringTables.Write(pData);
 
 	ALIGN64(pData);
-	pRigHdr->boneDataOffset = SHORTOFFSET(pBase, pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->boneDataOffset);
 	auto* pBoneDatas = reinterpret_cast<r5::v16::mstudiobonedata_t*>(pData);
 	for (int i = 0; i < pRigHdr->boneCount; i++) {
 		auto& bone = rig.bones[i];

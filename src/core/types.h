@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstring>
 #include <core/math_types.h>
+#include <core/write_utils.h>
+
 
 namespace temp {
 	template<typename TPtrType>
@@ -43,15 +45,19 @@ namespace temp {
 		char* Write(char* pData) {
 			for (auto& it : entries) {
 				if (it.dupindex == -1) {
-					if constexpr (std::is_same_v<TPtrType, uint16_t>) { ALIGN2(pData); }
-					it.addr = pData;
 					if (it.ptr) {
 						if constexpr (std::is_same_v<TPtrType, int> || std::is_same_v<TPtrType, int32_t>) {
 							*it.ptr = static_cast<TPtrType>(pData - it.base);
 						}
 						else if constexpr (std::is_same_v<TPtrType, uint16_t>) {
-							*it.ptr = SHORTOFFSET(it.base, pData);
+							pData = EmitShortOffset(pData, it.base, *it.ptr);
 						}
+					}
+					else {
+						if constexpr (std::is_same_v<TPtrType, uint16_t>) { ALIGN2(pData); }
+					}
+					it.addr = pData;
+					if (it.ptr) {
 						const size_t length = it.str.length();
 						strcpy_s(pData, length + 1, it.str.c_str());
 						pData += length;
@@ -65,7 +71,7 @@ namespace temp {
 							*it.ptr = static_cast<TPtrType>(entries[it.dupindex].addr - it.base);
 						}
 						else if constexpr (std::is_same_v<TPtrType, uint16_t>) {
-							*it.ptr = SHORTOFFSET(it.base, entries[it.dupindex].addr);
+							EncodeShortOffset(it.base, entries[it.dupindex].addr, *it.ptr);
 						}
 					}
 				}

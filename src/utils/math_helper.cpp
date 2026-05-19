@@ -232,7 +232,8 @@ void AngleQuaternion(Vector3 angles, Quaternion& outQuat) {
 	float sr, sp, sy, cr, cp, cy;
 
 	__m128 radians, sine, cosine;
-	radians = _mm_load_ps(&angles.x);
+
+	radians = _mm_set_ps(0.0f, angles.z, angles.y, angles.x);
 	radians = _mm_mul_ps(radians, _mm_set_ps1(0.5f));
 
 	sine = _mm_sincos_ps(&cosine, radians);

@@ -42,7 +42,8 @@
     <ClInclude Include="src\core\math_types.h"><Filter>src\core</Filter></ClInclude>
     <ClInclude Include="src\core\parsers.h"><Filter>src\core</Filter></ClInclude>
     <ClInclude Include="src\core\types.h"><Filter>src\core</Filter></ClInclude>
-
+    <ClInclude Include="src\core\write_utils.h"><Filter>src\core</Filter></ClInclude>
+	  
     <ClCompile Include="src\mdl\mdl.cpp"><Filter>src\mdl</Filter></ClCompile>
     <ClInclude Include="src\mdl\mdl.h"><Filter>src\mdl</Filter></ClInclude>
     <ClInclude Include="src\mdl\studio.h"><Filter>src\mdl</Filter></ClInclude>
@@ -64,6 +65,7 @@
     <ClInclude Include="src\utils\misc.h"><Filter>src\utils</Filter></ClInclude>
     <ClInclude Include="src\utils\print.h"><Filter>src\utils</Filter></ClInclude>
     <ClInclude Include="src\utils\rson_parser.h"><Filter>src\utils</Filter></ClInclude>
+	  
   </ItemGroup>
 
   <ItemGroup>

@@ -41,6 +41,7 @@
     <ClInclude Include="src\core\types.h" />
     <ClInclude Include="src\core\cli.h" />
     <ClInclude Include="src\core\parsers.h" />
+    <ClInclude Include="src\core\write_utils.h" />
     <ClInclude Include="src\mdl\mdl.h" />
     <ClInclude Include="src\mdl\studio.h" />
     <ClInclude Include="src\mdl\studio_p2.h" />

@@ -399,7 +399,7 @@ void ParseRSEQ_v11(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
-                anim.sectionstallframes = pAnimDesc->sectionstallframes;
+                if (pAnimDesc->sectionindex) anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -503,7 +503,7 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
-                anim.sectionstallframes = pAnimDesc->sectionstallframes;
+                if (pAnimDesc->sectionindex) anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -619,7 +619,7 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 anim.fps       = pAnimDesc->fps;
                 anim.flags     = pAnimDesc->flags;
                 anim.numframes = pAnimDesc->numframes;
-                anim.sectionstallframes = pAnimDesc->sectionstallframes;
+                if (pAnimDesc->sectionindex) anim.sectionstallframes = pAnimDesc->sectionstallframes;
                 anim.InitData(rig, seq.IsAdditive());
 
                 if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
@@ -1089,7 +1089,6 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
     print("\n");
 }
 
-
 // ============================================================================
 //  WriteRSEQ_v11
 // ============================================================================
@@ -1144,9 +1143,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
             verbose("%s\n", seq.name.c_str());
 
-            ALIGN2(pData);
             if (!seq.posekeys.empty()) {
-                v11SeqDesc->posekeyindex = SHORTOFFSET(pBase, pData);
+                pData = EmitShortOffset(pData, pBase, v11SeqDesc->posekeyindex);
                 auto* posekeys = reinterpret_cast<float*>(pData);
                 const int pkcount = (int)seq.posekeys.size();
                 for (int i = 0; i < pkcount; i++) posekeys[i] = seq.posekeys[i];
@@ -1163,9 +1161,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }), evts.end());
             }
 
-            ALIGN2(pData);
             v11SeqDesc->numevents  = static_cast<uint16_t>(seq.events.size());
-            v11SeqDesc->eventindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->eventindex);
             if (v11SeqDesc->numevents) {
                 auto* v11Events = reinterpret_cast<anim::v11::mstudioevent_t*>(pData);
                 const int nevents = (int)v11SeqDesc->numevents;
@@ -1180,8 +1177,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += sizeof(anim::v11::mstudioevent_t) * v11SeqDesc->numevents;
 
-            ALIGN2(pData);
-            v11SeqDesc->autolayerindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->autolayerindex);
             auto* v11Autolayer = reinterpret_cast<anim::v11::mstudioautolayer_t*>(pData);
             const int nautolayers = (int)seq.autolayers.size();
             for (int i = 0; i < nautolayers; i++) {
@@ -1195,18 +1191,15 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += v11SeqDesc->numautolayers * sizeof(anim::v11::mstudioautolayer_t);
 
-            ALIGN2(pData);
-            v11SeqDesc->weightlistindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->weightlistindex);
             auto* v11WeightList = reinterpret_cast<float*>(pData);
             const int nbones = (int)rig.bones.size();
             for (int i = 0; i < nbones; i++) v11WeightList[i] = seq.weightlist[i];
             pData += sizeof(float) * nbones;
 
-            ALIGN2(pData);
-            v11SeqDesc->iklockindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->iklockindex);
 
-            ALIGN2(pData);
-            v11SeqDesc->activitymodifierindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->activitymodifierindex);
             auto* v11Actmod = reinterpret_cast<anim::v11::mstudioactivitymodifier_t*>(pData);
             const int nactmods = (int)seq.actmods.size();
             for (int i = 0; i < nactmods; i++) {
@@ -1216,9 +1209,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             }
             pData += sizeof(anim::v11::mstudioactivitymodifier_t) * v11SeqDesc->numactivitymodifiers;
 
-            ALIGN2(pData);
             std::vector<std::pair<int, uint16_t>> blends_index_map;
-            v11SeqDesc->animindexindex = SHORTOFFSET(pBase, pData);
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->animindexindex);
             auto* v11Blends = reinterpret_cast<uint16_t*>(pData);
             pData += sizeof(uint16_t) * v11SeqDesc->numblends;
 
@@ -1227,10 +1219,10 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
             char* pDataExtn = pBaseExtn;
 
             constexpr uint32_t targetsectionframes = 61;
-
-            ALIGN4(pData);
+           
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
-                uint16_t blends_short = SHORTOFFSET(pBase, pData);
+                uint16_t blends_short;
+                pData = EmitShortOffset(pData, pBase, blends_short);
                 blends_index_map.push_back({ seq.blends[anim_iter], blends_short });
                 auto& anim = seq.anims[anim_iter];
 
@@ -1257,7 +1249,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                 if (anim.flags & ANIM_VALID) {
                     if (anim.numframes > (int)targetsectionframes) {
-                        animDesc->sectionindex = SHORTOFFSET(animDesc, pData);
+                        pData = EmitShortOffset(pData, animDesc, animDesc->sectionindex);
                         anim.numsections = GetSectionCount(*animDesc);
                         anim.pAnimSections = reinterpret_cast<int32_t*>(pData);
                         pData += sizeof(int32_t) * anim.numsections;
@@ -1265,8 +1257,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
                 }
             }
-            ALIGN2(pData);
-            v11SeqDesc->weightFixupOffset = SHORTOFFSET(pBase, pData);
+
+            pData = EmitShortOffset(pData, pBase, v11SeqDesc->weightFixupOffset);
 
             ALIGN2(pData);
             pData = stringTables.Write(pData);
@@ -1279,11 +1271,10 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                 if (!(anim.flags & ANIM_VALID)) continue;
 
-                ALIGN2(pData);
                 if (!anim.ikrules.empty()) {
                     v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
                     animDesc->numikrules = static_cast<uint16_t>(anim.ikrules.size());
-                    animDesc->ikruleindex = SHORTOFFSET(animDesc, pData);
+                    pData = EmitShortOffset(pData, animDesc, animDesc->ikruleindex);
                     auto* v11Ikrule = reinterpret_cast<anim::v11::mstudioikrule_t*>(pData);
 
                     for (int i = 0; i < (int)anim.ikrules.size(); i++) {
@@ -1318,7 +1309,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                     for (int i = 0; i < (int)anim.ikrules.size(); i++) {
                         const temp::ikrule_t& ikrule = anim.ikrules[i];
-                        v11Ikrule[i].compressedikerrorindex = SHORTOFFSET(&v11Ikrule[i], pData);
+                        pData = EmitShortOffset(pData, &v11Ikrule[i], v11Ikrule[i].compressedikerrorindex);
                         if (!ikrule.sectionframes) continue;
 
                         const int32_t sectioncount = static_cast<int32_t>((float)(anim.numframes - 1) / (float)ikrule.sectionframes) + 1;
@@ -1337,7 +1328,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                         uint32_t ikstartframe = 0;
                         for (int section = 0; section < sectioncount; section++) {
-                            sectionindices[section] = SHORTOFFSET(&v11Ikrule[i], pData);
+                            pData = EmitShortOffset(pData, &v11Ikrule[i], sectionindices[section]);
                             const int sectionframes = GetSectionLength(anim.numframes, ikrule.sectionframes, section);
                             const uint32_t framerange = sectionframes + !(section + 1 == sectioncount);
                             const uint32_t endframe = ikstartframe + framerange;
@@ -1473,9 +1464,8 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     startframe += sectionframes;
                 }
 
-                ALIGN2(pData);
                 if ((anim.flags & r5::ANIM_FRAMEMOVEMENT) && anim.movement.sectionframes != 0) {
-                    animDesc->framemovementindex = SHORTOFFSET(animDesc, pData);
+                    pData = EmitShortOffset(pData, animDesc, animDesc->framemovementindex);
                     auto* frameMovement = reinterpret_cast<anim::v7::mstudioframemovement_t*>(pData);
                     frameMovement->scale         = anim.movement.scale;
                     frameMovement->sectionframes = anim.movement.sectionframes;
@@ -1495,7 +1485,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
 
                     uint32_t fmstartframe = 0;
                     for (uint32_t section = 0; section < sectioncount; section++) {
-                        sectionindices[section] = SHORTOFFSET(frameMovement, pData);
+                        pData = EmitShortOffset(pData, frameMovement, sectionindices[section]);
                         const int      sectionframes = GetSectionLength(anim.numframes, anim.movement.sectionframes, section);
                         const uint32_t framerange    = sectionframes + !(section + 1 == sectioncount);
                         const uint32_t endframe      = fmstartframe + framerange;

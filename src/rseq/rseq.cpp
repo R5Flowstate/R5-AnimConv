@@ -612,8 +612,14 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
 
                 temp::animdesc_t anim{};
 
-                if (pAnimDesc->animDataAsset)
-                    anim.asqd = LoadFile(std::format("{}/animseq_data/0x{:X}.asqd", in_dir, pAnimDesc->animDataAsset));
+                if (pAnimDesc->animDataAsset) {
+                    const std::string asqdPath = std::format("{}/animseq_data/0x{:X}.asqd", in_dir, pAnimDesc->animDataAsset);
+                    if (!std::filesystem::is_regular_file(asqdPath)) {
+                        print("[!] Error: asqd not found for %s\n", rel.string().c_str());
+                        return;
+                    }
+                    anim.asqd = LoadFile(asqdPath);
+                }
 
                 anim.name      = STRING_FROM_IDX(pAnimDesc, pAnimDesc->sznameindex);
                 anim.fps       = pAnimDesc->fps;
@@ -1222,6 +1228,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
            
             for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
                 uint16_t blends_short;
+                ALIGN4(pData); // Respawn 4-aligns each animdesc (matches native v11 layout)
                 pData = EmitShortOffset(pData, pBase, blends_short);
                 blends_index_map.push_back({ seq.blends[anim_iter], blends_short });
                 auto& anim = seq.anims[anim_iter];
@@ -1235,7 +1242,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 animDesc->numikrules          = static_cast<uint16_t>(anim.ikrules.size());
                 animDesc->sectionDataExternal = 0;
                 animDesc->unk1                = 0;
-                animDesc->sectionstallframes  = anim.sectionstallframes;
+                animDesc->sectionstallframes  = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(anim.sectionstallframes) : 0; // 0 when unsectioned (matches native v11)
                 animDesc->sectionframes       = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(targetsectionframes) : 0;
                 animDesc->sectionindex        = 0;
                 animDesc->ikruleindex         = 0;
@@ -1270,6 +1277,15 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 auto* animDesc = reinterpret_cast<anim::v11::mstudioanimdesc_t*>(anim.pAnimDesc);
 
                 if (!(anim.flags & ANIM_VALID)) continue;
+
+                // S21 has no datapoint decoder (anim section decode tests only
+                // ANIM_VALID 0x20000, never ANIM_DATAPOINT 0x200000). A non-datapoint source carries
+                // classic RLE in its .asqd that is byte-identical to native v11; copy it verbatim
+                // (byte-1:1). Datapoint sources fall through to the re-encoder (the only option for S21).
+                const bool bClassicTranscode = !(anim.flags & r5::ANIM_DATAPOINT)
+                                             && anim.numsections == 1
+                                             && anim.ikrules.empty()
+                                             && !anim.asqd.buffer.empty();
 
                 if (!anim.ikrules.empty()) {
                     v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
@@ -1350,6 +1366,19 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 }
 
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
+
+                if (bClassicTranscode) {
+                    verbose("[asqd-transcode] %s: copied %zu bytes verbatim (byte-1:1)\n", anim.name.c_str(), anim.asqd.size);
+                    const size_t remain = static_cast<size_t>((pBase + buffer.size()) - pData);
+                    if (anim.asqd.size > remain) {
+                        print("[!] Error: asqd too large for rseq buffer (%zu > %zu) in %s\n",
+                            anim.asqd.size, remain, anim.name.c_str());
+                        return;
+                    }
+                    memcpy(pData, anim.asqd.buffer.data(), anim.asqd.size);
+                    pData += static_cast<ptrdiff_t>(anim.asqd.size);
+                    ALIGN4(pData);
+                } else {
 
                 uint32_t startframe = 0;
                 for (uint32_t section = 0; section < anim.numsections; section++) {
@@ -1463,6 +1492,7 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     ALIGN4(pOut);
                     startframe += sectionframes;
                 }
+                } // end else: re-encode path (classic transcode copied .asqd verbatim above)
 
                 if ((anim.flags & r5::ANIM_FRAMEMOVEMENT) && anim.movement.sectionframes != 0) {
                     pData = EmitShortOffset(pData, animDesc, animDesc->framemovementindex);

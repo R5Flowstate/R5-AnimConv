@@ -1,49 +1,31 @@
-# R5-AnimConv
+# R5-AnimConv ( R5Flowstate/S21 )
 
-**R5-AnimConv** is a tool for converting **Source engine file formats** into ReSource Animation file formats.
+Converts Source / ReSource animation assets (MDL, RRIG, RSEQ) between
+versions. This fork adds a **Season 21 writer** (`-o 21`) emitting
+**rrig v17 + rseq v11**; upstream wrote Season 3 only.
 
----
+Agents view included: CLAUDE.md
 
-### Usage
+## Usage
 
-
-``` bash
-# MDL mode
-R5-AnimConv.exe <model.mdl> [-o <out season>] [-rp <override_rrig_path>] [-sp <override_rseq_path>]
-
-# RSEQ mode
-R5-AnimConv.exe <parent_directory> [-i <in_season>] [-o <out season>]
+```
+R5-AnimConv <model.mdl> [-o <season>] [-rp <rrig path>] [-sp <rseq path>]
+R5-AnimConv <directory> [-i <season>] [-o <season>] [-outpath <dir>]
 ```
 
->**Options:**
->- `-i <season>` — Input assets season (RSEQ mode only, range: 7–28, default: 28)
->- `-o <season>` — Output assets season (range: 3 and 21, default: 3)
->- `-outpath <path>` - Output directory (default: .\\conv\\)
->- `-verbose <level>` - Verbose output (0: No verbose, 1: Minimal, 2: Full verbose, default: 1)
->- `-ne` — Suppress RePak entries output
->- `-skipevents` — Skip events that may cause crashes
->- `-nopause` — No pause at execution end
->- `-comperr <float>` — Compression error threshold (0.5–2.0 recommended, 0.0 lossless, default: 1.0)
->- `-rp <path>` — Override internal rrig path (MDL mode only)
->- `-sp <path>` — Override internal rseq path (MDL mode only)
+```
+# S21 client (rrig v17 + rseq v11)
+R5-AnimConv <dir> -i 28 -o 21
 
----
+# S3 dedicated server -- the default
+R5-AnimConv <dir> -i 28
 
-### Supported Versions
+# single model, rewriting the internal rrig path
+R5-AnimConv model.mdl -o 21 -rp animations/mymodel.rrig
+```
 
->**MDL Mode**
->- v49 *(Missing ikrules / movements)*
->- v53
+Directory mode expects `animseq_data/0x{GUID}.asqd` beside the extract; a
+missing asqd skips that sequence rather than aborting. Long clips may write
+a sibling `.rseq_extn` -- pack it alongside the `.rseq`.
 
->**RSEQ Mode**
->- Seasons **7 – 28**
-
->**Outputs**
->- Season **3**
->- Season **21** *(Experimental)*
-
----
-### Based on:
->- [rmdlconv](https://github.com/r-ex/rmdlconv)
->- [RSX](https://github.com/r-ex/rsx)
->- [resource_model_templates](https://github.com/IJARika/resource_model_templates)
+Upstream: [someoneatemylastsliceofpizza/R5-AnimConv](https://github.com/someoneatemylastsliceofpizza/R5-AnimConv)

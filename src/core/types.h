@@ -164,6 +164,9 @@ namespace temp {
 		int32_t* pAnimSections = nullptr;
 
 		file_t asqd{};
+		bool asqdBfa6 = false; // payload begins with a 6-bit-per-bone flag array (S30 v13)
+		bool asqdStub = false; // payload failed the RLE fit check; only the decoded base pose is usable
+		bool reencode = false; // decoded tracks were edited; the source payload no longer describes them
 
 		std::vector <animdata_t> animdata;
 		std::vector<temp::ikrule_t> ikrules{};

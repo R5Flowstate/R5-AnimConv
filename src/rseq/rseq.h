@@ -53,7 +53,7 @@ namespace r5 {
         void CalcBonePositionVirtual_DP(int sectionlength, const uint8_t** panimtrack, int localFrame, Vector3& pos);
         void CalcBoneScale_DP          (int sectionlength, const uint8_t** panimtrack, int localFrame, Vector3& scale);
 
-        void ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlength, uint32_t sectionbaseframe, temp::rig_t& rig, temp::animdesc_t& anim);
+        void ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlength, uint32_t sectionbaseframe, temp::rig_t& rig, temp::animdesc_t& anim, bool sixBit = false);
         template<typename TAnimDesc> void ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::Sequence& seq, temp::animdesc_t& anim);
         template<typename TAnimDesc> void ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim);
     }
@@ -83,6 +83,17 @@ int GetSectionLength(int numframes, int sectionframes, int section);
 template<typename TAnimDesc> int GetSectionLength(const TAnimDesc& animdesc, int section, int numSections);
 template<typename TAnimDesc> int GetSectionCount (const TAnimDesc& animdesc);
 
+// S30 (v13) bone-flag array: 6 bits per bone, IALIGN2 (classic is 4 bits).
+// Values are the classic axis mask; the wider pitch is the entire v13 delta.
+inline uint32_t BFA6Size(int numbones) { return ((uint32_t)(numbones * 6 + 7) / 8 + 1) & ~1u; }
+inline uint8_t BFA6Flag(const char* pBFA, int bone) {
+    const uint32_t bit = (uint32_t)bone * 6u;
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(pBFA) + bit / 8;
+    uint32_t v = (uint32_t)(*p >> (bit % 8));
+    if ((bit % 8) > 2) v |= (uint32_t)p[1] << (8 - (bit % 8));
+    return (uint8_t)(v & 0x3F);
+}
+
 std::vector<int32_t> GetAnimIndexes(const int32_t*  pBlends, temp::Sequence& seq, int32_t numanims);
 std::vector<int32_t> GetAnimIndexes(const uint16_t* pBlends, temp::Sequence& seq, int32_t numanims);
 
@@ -97,6 +108,7 @@ void ParseRSEQ_v10 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v11 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v12 (std::string in_dir, temp::rig_t& rig);
 void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig);
+void ParseRSEQ_v13(std::string in_dir, temp::rig_t& rig);
 
 void WriteAnim(char*& pData, r5::anim::studioanimvalue_ptr_t* animvalueptr, const std::vector<Vector3>& rawdata, int32_t startframe, int32_t endframe, float scale);
 
@@ -105,6 +117,8 @@ void WriteCompressedAnim(char*& pData, uint8_t type, int N, const int16_t* qv_bl
 
 void WriteRSEQ_v7(temp::rig_t& rig);
 void WriteRSEQ_v11(temp::rig_t& rig);
+
+void DumpTracks(const temp::rig_t& rig, const std::string& outdir);
 
 extern std::vector<int> comptypes;
 extern float g_AnimCompressError;

@@ -58,7 +58,8 @@ int GetSectionLength(const TAnimDesc& animdesc, const int section, const int num
 
         return (remainingframes <= animdesc.sectionframes) ? remainingframes : animdesc.sectionframes;
     }
-    else if constexpr ( std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+    else if constexpr ( std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+                          std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>) {
         if (!animdesc.sectionframes) return animdesc.numframes;
 
         const int  sectionstallframes = animdesc.sectionstallframes;
@@ -82,6 +83,7 @@ template int GetSectionLength<r5::anim::v10::mstudioanimdesc_t> (const r5::anim:
 template int GetSectionLength<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t&,  const int, const int);
 template int GetSectionLength<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t&, const int, const int);
+template int GetSectionLength<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t&, const int, const int);
 
 template<typename TAnimDesc>
 int GetSectionCount(const TAnimDesc& animdesc) {
@@ -96,12 +98,14 @@ int GetSectionCount(const TAnimDesc& animdesc) {
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
-        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>) {
         const int useTrail = (animdesc.flags & ANIM_DATAPOINT) ? 0 : 1;
         const int useStall = animdesc.sectionstallframes ? 1 : 0;
         const int base     = (animdesc.numframes - animdesc.sectionstallframes - 1) / animdesc.sectionframes;
 
-        if constexpr(std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) return base + useTrail + useStall;
+        if constexpr(std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+                     std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>) return base + useTrail + useStall;
         return base + useTrail + useStall + 1;
     }
     return 0;
@@ -114,6 +118,7 @@ template int GetSectionCount<r5::anim::v10::mstudioanimdesc_t> (const r5::anim::
 template int GetSectionCount<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t&);
 template int GetSectionCount<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t&);
+template int GetSectionCount<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t&);
 
 // ============================================================================
 //  RLE
@@ -123,6 +128,20 @@ int RLE::GetAnimValueOffset(const r5::anim::mstudioanimvalue_t* const panimvalue
     const int lutBaseIdx = panimvalue->meta.type * 3;
     return s_AnimSeekLUT[lutBaseIdx]
          + ((s_AnimSeekLUT[lutBaseIdx + 1] + panimvalue->meta.total * s_AnimSeekLUT[lutBaseIdx + 2]) >> 4);
+}
+
+// Backstop against malformed runs (total==0, non-positive seek, runaway walk).
+// Well-formed tracks never hit this; default to 0 instead of hanging/over-reading.
+static bool SeekAnimValueRun(const r5::anim::mstudioanimvalue_t*& panimvalue, int& k) {
+    int walked = 0;
+    while (panimvalue->meta.total <= k) {
+        const int seek = RLE::GetAnimValueOffset(panimvalue);
+        if (panimvalue->meta.total == 0 || seek <= 0 || ++walked > 0x20000)
+            return false;
+        k -= panimvalue->meta.total;
+        panimvalue += seek;
+    }
+    return true;
 }
 
 void RLE::ExtractAnimValue(const r5::anim::mstudioanimvalue_t* panimvalue, const int frame, const float scale, float& v1) {
@@ -188,19 +207,13 @@ void p2::RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* pa
 
 void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1) {
     int k = frame;
-    while (panimvalue->meta.total <= k) {
-        k -= panimvalue->meta.total;
-        panimvalue += RLE::GetAnimValueOffset(panimvalue);
-    }
+    if (!SeekAnimValueRun(panimvalue, k)) { v1 = 0; return; }
     RLE::ExtractAnimValue(panimvalue, k, scale, v1);
 }
 
 void RLE::ExtractAnimValue(int frame, const r5::anim::mstudioanimvalue_t* panimvalue, float scale, float& v1, float& v2) {
     int k = frame;
-    while (panimvalue->meta.total <= k) {
-        k -= panimvalue->meta.total;
-        panimvalue += RLE::GetAnimValueOffset(panimvalue);
-    }
+    if (!SeekAnimValueRun(panimvalue, k)) { v1 = 0; v2 = 0; return; }
 
     if (k >= panimvalue->meta.total - 1) {
         RLE::ExtractAnimValue(panimvalue, k, scale, v1);
@@ -546,14 +559,16 @@ void r5::DP::CalcBoneScale_DP(const int sectionlength, const uint8_t** panimtrac
     *panimtrack = reinterpret_cast<const uint8_t*>(pPackedData + total);
 }
 
-void r5::DP::ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlength, uint32_t sectionbaseframe, temp::rig_t& rig, temp::animdesc_t& anim) {
+void r5::DP::ParseDataPointSection(const uint8_t* pBoneFlagArray, int sectionlength, uint32_t sectionbaseframe, temp::rig_t& rig, temp::animdesc_t& anim, bool sixBit) {
     const int numbones = static_cast<int>(rig.bones.size());
     const bool isNonDelta = !(anim.flags & ANIM_DELTA);
-    const uint32_t bfa_size = (static_cast<uint32_t>(numbones * 4 + 7) / 8 + 1) & ~1u;
+    const uint32_t bfa_size = sixBit ? BFA6Size(numbones)
+                                     : (static_cast<uint32_t>(numbones * 4 + 7) / 8 + 1) & ~1u;
     const r5::anim::mstudio_rle_anim_t* panim = reinterpret_cast<const r5::anim::mstudio_rle_anim_t*>(pBoneFlagArray + bfa_size);
 
     for (int bone = 0; bone < numbones; bone++) {
-        const uint8_t boneFlags = static_cast<uint8_t>(pBoneFlagArray[bone / 2] >> (4 * (bone % 2))) & 0xF;
+        const uint8_t boneFlags = sixBit ? BFA6Flag(reinterpret_cast<const char*>(pBoneFlagArray), bone)
+                                         : static_cast<uint8_t>(pBoneFlagArray[bone / 2] >> (4 * (bone % 2))) & 0xF;
 
         if (!(boneFlags & r5::DP::BONEDATA)) continue;
 
@@ -636,7 +651,9 @@ template<typename TAnimDesc>
 void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::Sequence& seq, temp::animdesc_t& anim) {
     AssertMsg(!anim.asqd.buffer.empty(), "DataPoint buffer is null for '%s'", anim.asqd.path.c_str());
 
-    constexpr bool isV121 = std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>;
+    constexpr bool isV121 = std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+                            std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>;
+    constexpr bool isV13 = std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>;
 
     uint32_t  num_sections = 1;
     int32_t* animsections = nullptr;
@@ -684,7 +701,7 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
             }
         }
 
-        r5::DP::ParseDataPointSection(reinterpret_cast<const uint8_t*>(pBoneFlagArray), sectionframes, sectionbaseframe, rig, anim);
+        r5::DP::ParseDataPointSection(reinterpret_cast<const uint8_t*>(pBoneFlagArray), sectionframes, sectionbaseframe, rig, anim, isV13);
         sectionbaseframe += static_cast<uint32_t>(sectionframes);
     }
     
@@ -702,6 +719,7 @@ void r5::DP::ParseDataPoint(const TAnimDesc* pAnimDesc, temp::rig_t& rig, temp::
 }
 template void r5::DP::ParseDataPoint<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
 template void r5::DP::ParseDataPoint<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
+template void r5::DP::ParseDataPoint<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t*, temp::rig_t&, temp::Sequence&, temp::animdesc_t&);
 
 template<typename TAnimDesc>
 void r5::DP::ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
@@ -763,6 +781,7 @@ void r5::DP::ParseFrameMovementsDP(const TAnimDesc* pAnimDesc, temp::animdesc_t&
 }
 template void r5::DP::ParseFrameMovementsDP<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*, temp::animdesc_t&);
 template void r5::DP::ParseFrameMovementsDP<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
+template void r5::DP::ParseFrameMovementsDP<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t*, temp::animdesc_t&);
 
 std::vector<int32_t> GetAnimIndexes(const int32_t* pBlends, temp::Sequence& seq, int32_t numanims) {
     std::vector<int32_t> blends_index_map;
@@ -804,7 +823,8 @@ void ParsePoseKey(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     else if constexpr (
         std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
         std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
-        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>)
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v13::mstudioseqdesc_t>)
         pPosekeys = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(pSeqDesc->posekeyindex));
 
     const int count = pSeqDesc->groupsize[0] + pSeqDesc->groupsize[1];
@@ -815,6 +835,7 @@ template void ParsePoseKey<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10
 template void ParsePoseKey<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParsePoseKey<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
+template void ParsePoseKey<r5::anim::v13::mstudioseqdesc_t>(const r5::anim::v13::mstudioseqdesc_t*, temp::Sequence&);
 
 
 template<typename TSeqDesc>
@@ -864,7 +885,8 @@ void ParseEvent(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     else if constexpr (
         std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
         std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
-        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v13::mstudioseqdesc_t>) {
         auto* pEvents = reinterpret_cast<r5::anim::v11::mstudioevent_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->eventindex));
         for (int i = 0; i < pSeqDesc->numevents; i++) {
             if (!pEvents[i].szeventindex) continue;
@@ -883,6 +905,7 @@ template void ParseEvent<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10::
 template void ParseEvent<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseEvent<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseEvent<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
+template void ParseEvent<r5::anim::v13::mstudioseqdesc_t>(const r5::anim::v13::mstudioseqdesc_t*, temp::Sequence&);
 
 
 template<typename TSeqDesc>
@@ -907,7 +930,8 @@ void ParseAutoLayer(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     else if constexpr (
         std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
         std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
-        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v13::mstudioseqdesc_t>) {
         auto* pAutolayer = reinterpret_cast<r5::anim::v11::mstudioautolayer_t*>((char*)pSeqDesc + OFFSET(pSeqDesc->autolayerindex));
         for (int i = 0; i < pSeqDesc->numautolayers; i++) {
             temp::autolayer_t autolayer{};
@@ -927,6 +951,7 @@ template void ParseAutoLayer<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v
 template void ParseAutoLayer<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseAutoLayer<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseAutoLayer<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
+template void ParseAutoLayer<r5::anim::v13::mstudioseqdesc_t>(const r5::anim::v13::mstudioseqdesc_t*, temp::Sequence&);
 
 
 template<typename TSeqDesc>
@@ -940,7 +965,8 @@ void ParseWeightList(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
     else if constexpr (
         std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
         std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
-        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v13::mstudioseqdesc_t>) {
         const auto idx = pSeqDesc->weightlistindex;
         if (idx && idx != 1 && idx != 3 && idx != 5) {
             const auto* pWeightList = reinterpret_cast<const float*>((const char*)pSeqDesc + OFFSET(idx));
@@ -956,6 +982,7 @@ template void ParseWeightList<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::
 template void ParseWeightList<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseWeightList<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseWeightList<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
+template void ParseWeightList<r5::anim::v13::mstudioseqdesc_t>(const r5::anim::v13::mstudioseqdesc_t*, temp::Sequence&);
 
 
 template<typename TSeqDesc>
@@ -970,20 +997,21 @@ void ParseActMod(const TSeqDesc* pSeqDesc, temp::Sequence& seq) {
         for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
             temp::actmod_t actmod{};
             actmod.name = STRING_FROM_IDX(&pActMod[i], pActMod[i].sznameindex);
-            actmod.negate = pActMod->negate;
+            actmod.negate = pActMod[i].negate;
             seq.actmods.push_back(actmod);
         }
     }
     else if constexpr (
         std::is_same_v<TSeqDesc, r5::anim::v11::mstudioseqdesc_t> ||
         std::is_same_v<TSeqDesc, r5::anim::v12::mstudioseqdesc_t> ||
-        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t>) {
+        std::is_same_v<TSeqDesc, r5::anim::v121::mstudioseqdesc_t> ||
+        std::is_same_v<TSeqDesc, r5::anim::v13::mstudioseqdesc_t>) {
         auto* pActMod = reinterpret_cast<r5::anim::v11::mstudioactivitymodifier_t*>(
             (char*)pSeqDesc + OFFSET(pSeqDesc->activitymodifierindex));
         for (int i = 0; i < pSeqDesc->numactivitymodifiers; i++) {
             temp::actmod_t actmod{};
             actmod.name = STRING_FROM_IDX(&pActMod[i], OFFSET(pActMod[i].sznameindex));
-            actmod.negate = pActMod->negate;
+            actmod.negate = pActMod[i].negate;
             seq.actmods.push_back(actmod);
         }
     }
@@ -993,6 +1021,7 @@ template void ParseActMod<r5::anim::v10::mstudioseqdesc_t> (const r5::anim::v10:
 template void ParseActMod<r5::anim::v11::mstudioseqdesc_t> (const r5::anim::v11::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseActMod<r5::anim::v12::mstudioseqdesc_t> (const r5::anim::v12::mstudioseqdesc_t*,  temp::Sequence&);
 template void ParseActMod<r5::anim::v121::mstudioseqdesc_t>(const r5::anim::v121::mstudioseqdesc_t*, temp::Sequence&);
+template void ParseActMod<r5::anim::v13::mstudioseqdesc_t>(const r5::anim::v13::mstudioseqdesc_t*, temp::Sequence&);
 
 
 template<typename TAnimDesc>
@@ -1056,7 +1085,8 @@ void RLE::ParseIkrules(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim) {
     else if constexpr (
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
-        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>) {
         if (pAnimDesc->ikruleindex == 3 || pAnimDesc->ikruleindex == 5) return;
 
         auto* ikrules = reinterpret_cast<r5::anim::v11::mstudioikrule_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->ikruleindex));
@@ -1114,6 +1144,7 @@ template void RLE::ParseIkrules<r5::anim::v10::mstudioanimdesc_t> (const r5::ani
 template void RLE::ParseIkrules<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseIkrules<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseIkrules<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
+template void RLE::ParseIkrules<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t*, temp::animdesc_t&);
 
 
 template<typename TAnimDesc>
@@ -1126,7 +1157,7 @@ void RLE::ParseFrameMovements(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim
         std::is_same_v<TAnimDesc, r5::anim::v10::mstudioanimdesc_t>) {
         auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + pAnimDesc->framemovementindex);
         auto* sectionindices = reinterpret_cast<int32_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
-        const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
+        const uint32_t sectioncount = pFrameMovement->sectionframes ? static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1 : 1;
 
         temp::framemovement_t movement{};
         movement.scale = pFrameMovement->scale;
@@ -1153,12 +1184,13 @@ void RLE::ParseFrameMovements(const TAnimDesc* pAnimDesc, temp::animdesc_t& anim
     else if constexpr (
         std::is_same_v<TAnimDesc, r5::anim::v11::mstudioanimdesc_t> ||
         std::is_same_v<TAnimDesc, r5::anim::v12::mstudioanimdesc_t> ||
-        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t>) {
+        std::is_same_v<TAnimDesc, r5::anim::v121::mstudioanimdesc_t> ||
+        std::is_same_v<TAnimDesc, r5::anim::v13::mstudioanimdesc_t>) {
         if (pAnimDesc->flags & ANIM_DATAPOINT) return;
 
         auto* pFrameMovement = reinterpret_cast<r5::anim::v7::mstudioframemovement_t*>((char*)pAnimDesc + OFFSET(pAnimDesc->framemovementindex));
         auto* sectionindices = reinterpret_cast<uint16_t*>((char*)pFrameMovement + sizeof(r5::anim::v7::mstudioframemovement_t));
-        const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1;
+        const uint32_t sectioncount = pFrameMovement->sectionframes ? static_cast<uint32_t>((float)(anim.numframes - 1) / (float)pFrameMovement->sectionframes) + 1 : 1;
 
         temp::framemovement_t movement{};
         movement.scale = pFrameMovement->scale;
@@ -1188,6 +1220,7 @@ template void RLE::ParseFrameMovements<r5::anim::v10::mstudioanimdesc_t> (const 
 template void RLE::ParseFrameMovements<r5::anim::v11::mstudioanimdesc_t> (const r5::anim::v11::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v12::mstudioanimdesc_t> (const r5::anim::v12::mstudioanimdesc_t*,  temp::animdesc_t&);
 template void RLE::ParseFrameMovements<r5::anim::v121::mstudioanimdesc_t>(const r5::anim::v121::mstudioanimdesc_t*, temp::animdesc_t&);
+template void RLE::ParseFrameMovements<r5::anim::v13::mstudioanimdesc_t>(const r5::anim::v13::mstudioanimdesc_t*, temp::animdesc_t&);
 
 
 // ============================================================================

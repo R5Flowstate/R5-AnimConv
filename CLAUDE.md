@@ -20,19 +20,31 @@ R5-AnimConv.exe <parent_directory> [-i <in>] [-o <out>]
 
 | flag | meaning |
 |------|---------|
-| `-i` | input season (RSEQ mode, 7–28, default 28) |
+| `-i` | input season (RSEQ mode, 7–28 and 30, default 28) |
 | `-o` | output season: **3** or **21** (default 3) |
 | `-outpath` | output dir (default `.\conv\`) |
 | `-ne` | no RePak entry dump |
 | `-skipevents` | drop crashy events |
 | `-nopause` | no end pause |
 | `-comperr` | compression threshold (default 1.0) |
+| `-targetrigs <dir>` | remap every clip onto the rig at the same relative path under `<dir>` by bone name, and write against that rig's base pose (use whenever a clip rides a rig the target build already owns) |
+| `-snapconstpos` | constant `def_*` / `jx_c_pov` / `jx_c_neck*` position tracks take the target base; `ja_*` and `jx_c_camera` keep authored offsets |
+| `-collapsepose <param>=<value>[@<seq substring>]` | fix a blend dimension on a pose parameter the target engine never drives |
+| `-dumprig <dir>` | JSON bone table of every parsed rig |
+| `-dumptracks <dir>` | JSON of every decoded RLE track (decoder oracle) |
 
 Season map is `src/core/parsers.h`.
 
 - **S21 write (`-o 21`)**: `WriteRRIG_v17` + `WriteRSEQ_v11`.
 - **S21 read (`-i 21`)**: `ParseRRIG_v17` + `ParseRSEQ_v11`.
 - **S3 write (`-o 3`)**: v8 rrig + v7 rseq (dedi).
+- **v13 read (`-i 30`)**: `ParseRRIG_v30` + `ParseRSEQ_v13`. aseq v13 is the
+  v12.1 layout with `asqd` payloads whose bone-flag array is **6 bits per
+  bone**; the decoder reads it directly and the v11 writer repacks it to
+  4-bit. Track pointers are byte offsets from the u16 word.
+- With `-targetrigs` loaded every clip takes the re-encode path (no verbatim
+  asqd copy), so remap, base swap and `-snapconstpos` reach single-section
+  clips too; `jx_c_start` is pinned to base.
 
 ## Do
 
@@ -70,5 +82,5 @@ sectioned clips index `table[i]` including slot 0 (last frame is a
 ## In / out
 
 - MDL in: v49 (ikrules/movements incomplete), v53.
-- RSEQ in: seasons 7–28.
+- RSEQ in: seasons 7–28 and 30.
 - Out: season 3, season 21.

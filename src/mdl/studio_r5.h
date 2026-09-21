@@ -595,6 +595,91 @@ namespace r5 {
 				int32_t lastFrame;
 			};
 
+		struct mstudioanimdesc_t {
+			float fps;
+			int32_t flags;
+			int32_t numframes;
+			uint16_t sznameindex;
+			uint16_t framemovementindex;
+			uint16_t numikrules;
+			uint8_t unused_12[4];
+			uint16_t ikruleindex;
+			uint64_t animDataAsset;
+			int64_t sectionDataExternal;
+			uint16_t unk1;
+			uint16_t sectionindex;
+			uint16_t sectionstallframes;
+			uint16_t sectionframes;
+		};
+	}
+
+		// S30 (aseq v13): seqdesc is the v18 shape (116 B) and animdesc the
+		// v19_1 shape (48 B) -- field-identical to v12.1. Animation payloads
+		// live in external .asqd files linked by animDataAsset guid.
+		namespace v13 {
+			struct mstudioseqdesc_t {
+				uint16_t szlabelindex;
+				uint16_t szactivitynameindex;
+				int32_t flags;
+				int16_t activity;
+				uint16_t actweight;
+				uint16_t numevents;
+				uint16_t eventindex;
+				Vector3 bbmin;
+				Vector3 bbmax;
+				uint16_t numblends;
+				uint16_t animindexindex;
+				int16_t paramindex[2];
+				float paramstart[2];
+				float paramend[2];
+				float fadeintime;
+				float fadeouttime;
+				uint16_t localentrynode;
+				uint16_t localexitnode;
+				uint16_t numikrules;
+				uint16_t numautolayers;
+				uint16_t autolayerindex;
+				uint16_t weightlistindex;
+				uint8_t groupsize[2];
+				uint16_t posekeyindex;
+				uint16_t numiklocks;
+				uint16_t iklockindex;
+				uint16_t unk_5C;
+				uint16_t cycleposeindex;
+				uint16_t activitymodifierindex;
+				uint16_t numactivitymodifiers;
+				int32_t ikResetMask;
+				int32_t unk1;
+				uint16_t weightFixupOffset;
+				uint16_t weightFixupCount;
+				uint16_t noInterpFrameOffset;
+				uint16_t noInterpFrameCount;
+			};
+
+			struct mstudioautolayer_t {
+				uint64_t iSequence;
+				int32_t iPose;
+				int32_t flags;
+				float start;
+				float peak;
+				float tail;
+				float end;
+			};
+
+			struct mstudioseqweightfixup_t {
+				float scale;
+				int32_t bone;
+				float unk_8;
+				float unk_C;
+				float unk_10;
+				float unk_14;
+			};
+
+			struct mstudio_nointerpframes_t {
+				int32_t firstFrame;
+				int32_t lastFrame;
+			};
+
 			struct mstudioanimdesc_t {
 				float fps;
 				int32_t flags;
@@ -611,6 +696,8 @@ namespace r5 {
 				uint16_t sectionstallframes;
 				uint16_t sectionframes;
 			};
+			static_assert(sizeof(mstudioseqdesc_t) == 116, "v13 seqdesc must be 116 B");
+			static_assert(sizeof(mstudioanimdesc_t) == 48, "v13 animdesc must be 48 B");
 		}
 
 	}

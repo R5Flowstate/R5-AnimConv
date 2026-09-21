@@ -8,6 +8,7 @@ extern uint8_t g_VerboseLevel;
 extern bool g_NoEntries;
 extern bool g_SkipEvents;
 extern bool g_NoPause;
+extern std::string g_DumpTracks;
 
 void GatherRigPaths(std::string in_dir, std::filesystem::directory_entry dir, std::vector<temp::rig_t>& rrig);
 void PrintRepakEntries(temp::rig_t& rig);

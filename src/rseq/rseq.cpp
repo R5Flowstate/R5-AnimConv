@@ -1,4 +1,5 @@
 #include <pch.h>
+#include <excpt.h>
 #include <rseq/rseq.h>
 
 extern std::string g_Outpath;
@@ -55,20 +56,23 @@ static void PopulateSeqCommon(temp::Sequence& seq, const TSeqDesc* pSeqDesc, con
     seq.unk1           = pSeqDesc->unk1;
 }
 
-static void ParseRLESection(const char* pBoneFlagArray, int numbones, uint32_t bfa_size, uint32_t sectionbaseframe, uint32_t sectionframes, temp::animdesc_t& anim) {
+static void ParseRLESection(const char* pBoneFlagArray, int numbones, uint32_t bfa_size, uint32_t sectionbaseframe, uint32_t sectionframes, temp::animdesc_t& anim, bool sixBit = false) {
     for (uint32_t localframe = 0; localframe < sectionframes; localframe++) {
         const uint32_t frame = sectionbaseframe + localframe;
         auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBoneFlagArray, bfa_size);
 
         for (int bone = 0; bone < numbones; bone++) {
-            const uint8_t boneFlags = pBoneFlagArray[bone / 2] >> (4 * (bone % 2)) & 0xF;
-            AssertMsg(boneFlags < 8, "BoneFlagArray is out of range.");
+            // S30 (v13) stores 6 bits per bone (rle/S30_ANIM_TRACK_FORMAT);
+            // the nibble-reader 0x8 "new anim type" was a misread artifact.
+            const uint8_t boneFlags = sixBit ? BFA6Flag(pBoneFlagArray, bone)
+                                             : pBoneFlagArray[bone / 2] >> (4 * (bone % 2)) & 0xF;
+            AssertMsg(boneFlags <= 0xF, "BoneFlagArray is out of range.");
 
             Vector3& trackpos = anim.animdata[bone].pos[frame];
             Vector3& trackrot = anim.animdata[bone].rot[frame];
             Vector3& trackscl = anim.animdata[bone].scl[frame];
 
-            if (boneFlags & RLE::BONEDATA) {
+            if (boneFlags & (RLE::BONEDATA | 0x8)) {
                 auto* pTrackData = PTR_FROM_IDX(uint16_t, pTrack, sizeof(anim::mstudio_rle_anim_t));
                 if (boneFlags & RLE::BONEPOS)   RLE::CalcBonePosition  (*pTrack, &pTrackData, trackpos, localframe);
                 if (boneFlags & RLE::BONEROT)   RLE::CalcBoneQuaternion(*pTrack, &pTrackData, trackrot, localframe);
@@ -556,16 +560,10 @@ void ParseRSEQ_v12(std::string in_dir, temp::rig_t& rig) {
 //  ParseRSEQ_v121
 // ============================================================================
 
-void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
-    ProgressBar bar(rig.rseqpaths.size());
-    std::vector<std::future<void>> tasks;
-    std::mutex mutex;
+static void ParseOneSeqV121(const char* in_dir_c, const char* file_c, temp::rig_t& rig, std::mutex& mutex){
+    const std::string in_dir(in_dir_c);
+    const std::string file(file_c);
 
-    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
-
-    tasks.reserve(rig.rseqpaths.size());
-    for (const auto& file : rig.rseqpaths) {
-        tasks.push_back(std::async(std::launch::async, [&, file]() {
             const std::string path          = in_dir + "\\" + file;
             const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
 
@@ -650,6 +648,17 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                     for (uint32_t section = 0; section < anim.numsections; section++) {
                         const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
 
+                        // Stale-ref guard on the COMPUTED range (raw sectionframes
+                        // may be 0xFFFF for healthy single-section clips): a section
+                        // running past numframes would write outside animdata and
+                        // poison the heap for other tasks. Skip loudly instead.
+                        if (sectionbaseframe + sectionframes > (uint32_t)anim.numframes) {
+                            printf("[!] Skipping %s (section %u frame range [%u..%u) exceeds numframes %d, stale refs)\n",
+                                seq.name.c_str(), section, sectionbaseframe, sectionbaseframe + sectionframes, anim.numframes);
+                            fflush(stdout);
+                            return;
+                        }
+
                         char* pBFA = reinterpret_cast<char*>(anim.asqd.buffer.data());
                         if (pAnimDesc->sectionindex && section) {
                             const int32_t sectionIdx = animsections[section - 1];
@@ -663,6 +672,14 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                                 AssertMsg((size_t)sectionIdx < anim.asqd.size, "passed the end of .asqd '%s:%s'", seq.name.c_str(), anim.asqd.path.c_str());
                                 pBFA = PTR_FROM_IDX(char, anim.asqd.buffer.data(), sectionIdx);
                             }
+                        }
+
+                        // Empty payload guard: classic RLE walks pBFA unconditionally;
+                        // a null walk pointer means stale refs, not inline data.
+                        if (anim.asqd.buffer.empty()) {
+                            printf("[!] Skipping %s (empty anim payload for '%s')\n", seq.name.c_str(), anim.name.c_str());
+                            fflush(stdout);
+                            return;
                         }
 
                         ParseRLESection(pBFA, numbones, bfa_size, sectionbaseframe, sectionframes, anim);
@@ -679,7 +696,300 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
                 std::lock_guard<std::mutex> lock(mutex);
                 rig.sequences.push_back(std::move(seq));
             }
-        }));
+}
+
+// File-scope SEH wrapper (POD params only): isolates one bad sequence's
+// AV/failfast so the rest of the rig still converts. Loud skip, then continue.
+static void RunOneSeqV121(const char* in_dir_c, const char* file_c, temp::rig_t* rig_p, std::mutex* mutex_p)
+{
+    __try {
+        ParseOneSeqV121(in_dir_c, file_c, *rig_p, *mutex_p);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        printf("[!] Skipping %s (parse fault, code=0x%08X)\n", file_c, GetExceptionCode());
+        fflush(stdout);
+    }
+}
+
+void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
+    ProgressBar bar(rig.rseqpaths.size());
+    std::vector<std::future<void>> tasks;
+    std::mutex mutex;
+
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
+
+    tasks.reserve(rig.rseqpaths.size());
+    for (const auto& file : rig.rseqpaths) {
+        // NOTE: file-scope SEH wrapper (no C++ objects, no C++ try): C2712/C2713
+        // forbid __try inside the loop lambda. C++ throws from the parsers
+        // (Error/AssertMsg, already printf+fflush) land here too.
+        tasks.push_back(std::async(std::launch::async, &RunOneSeqV121,
+            in_dir.c_str(), file.c_str(), &rig, &mutex));
+        if (g_VerboseLevel == 1) bar.AddAndPrint();
+    }
+    for (auto& t : tasks) t.get();
+    print("\n");
+}
+
+// ============================================================================
+//  ParseRSEQ_v13 (S30: aseq v13 + asqd v1 + arig v7)
+//
+//  Disk layout is field-identical to v12.1 (116 B seqdesc, 48 B animdesc with
+//  animDataAsset guid); only the asqd file naming differs: dumps use
+//  zero-padded 0x%016X while older flows wrote the unpadded form, so both are
+//  accepted. Section tables follow the engine convention (retail
+//  pAnimdataStall_2): section 0 (stall) is implicit at asqd+0, sections 1..
+//  come from entries[i] = section i+1 (negative = extn offset ~entry).
+// ============================================================================
+
+// All three axis tracks of one animated channel must start inside the payload.
+// NOTE: valueptr->offset is a BYTE offset (PTR_FROM_IDX adds raw bytes);
+// idx1/idx2 are mstudioanimvalue_t elements (pointer arithmetic x2).
+static bool TrackPointersFit(const char* vpo, const char* bufEnd) {
+    if (vpo + 4 > bufEnd) return false;
+    const uint16_t raw = *reinterpret_cast<const uint16_t*>(vpo);
+    const char* tx = vpo + (raw & 0x1FFF);
+    const uint8_t idx1 = static_cast<uint8_t>(vpo[2]);
+    const uint8_t idx2 = static_cast<uint8_t>(vpo[3]);
+    const uint8_t idx[3] = { 0, idx1, idx2 };
+    for (int a = 0; a < 3; a++) {
+        if (tx + idx[a] * 2 + 2 > bufEnd) return false;
+    }
+    return true;
+}
+
+// S30 stubs: framemovement-only anims may carry an asqd holding only the
+// bone-flag array plus a prefix of track headers. The RLE chain is
+// self-delimiting; if it runs past the buffer the payload is a stub: leave the
+// anim at its initialized (base) pose and still emit movement/ikrules.
+// Animated track pointers are validated too: a pointer outside the payload is
+// a deterministic stub signal (unlike a faulting walk, which may or may not
+// hit unmapped memory depending on heap layout).
+static bool RLESectionFits(const char* pBFA, int numbones, uint32_t bfa_size, const char* bufEnd, bool sixBit = false) {
+    if (pBFA + bfa_size > bufEnd) return false;
+    auto* pTrack = PTR_FROM_IDX(anim::mstudio_rle_anim_t, pBFA, bfa_size);
+    for (int bone = 0; bone < numbones; bone++) {
+        const uint8_t boneFlags = sixBit ? BFA6Flag(pBFA, bone)
+                                         : pBFA[bone / 2] >> (4 * (bone % 2)) & 0xF;
+        if (!(boneFlags & (RLE::BONEDATA | 0x8))) continue;
+        if ((char*)(pTrack + 1) > bufEnd) return false;
+        const uint32_t size = pTrack->size;
+        const char* td = (char*)pTrack + 2;
+        if (boneFlags & RLE::BONEPOS) {
+            if (pTrack->bAnimPosition) {
+                if (!TrackPointersFit(td + 4, bufEnd)) return false;
+                td += 8;
+            }
+            else td += 6;
+        }
+        if (boneFlags & RLE::BONEROT) {
+            if (pTrack->bAnimRotation) {
+                if (!TrackPointersFit(td, bufEnd)) return false;
+                td += 4;
+            }
+            else td += 8;
+        }
+        if (boneFlags & RLE::BONESCALE) {
+            if (pTrack->bAnimScale) {
+                if (!TrackPointersFit(td, bufEnd)) return false;
+                td += 8;
+            }
+            else td += 6;
+        }
+        if (td > bufEnd) return false;
+        pTrack = (anim::mstudio_rle_anim_t*)((char*)pTrack + size);
+        if ((char*)pTrack > bufEnd) return false;
+    }
+    return true;
+}
+
+static void ParseOneSeqV13(const char* in_dir_c, const char* file_c, temp::rig_t& rig, std::mutex& mutex){
+    const std::string in_dir(in_dir_c);
+    const std::string file(file_c);
+
+            const std::string path          = in_dir + "\\" + file;
+            const std::filesystem::path rel = std::filesystem::relative(path, in_dir);
+
+            if (!std::filesystem::is_regular_file(path)) {
+                print("[!] Error: rseq not found for %s\n", rel.string().c_str());
+                return;
+            }
+
+            size_t inputFileSize;
+            std::vector<char> buffer = ReadFileDirect(path, inputFileSize);
+            const char* stream_buffer = buffer.data();
+            const std::string out_dir = BuildOutputPath(in_dir, rel);
+
+            if (inputFileSize <= sizeof(anim::v13::mstudioseqdesc_t)) {
+                print("[!] Skipping %s (%zu byte)\n", std::filesystem::path(file).stem().string().c_str(), inputFileSize);
+                return;
+            }
+
+            auto* pSeqDesc      = reinterpret_cast<const anim::v13::mstudioseqdesc_t*>(stream_buffer);
+            const std::string seqname      = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szlabelindex);
+            const std::string activityname = STRING_FROM_IDX(pSeqDesc, pSeqDesc->szactivitynameindex);
+            const int numanims  = pSeqDesc->groupsize[0] * pSeqDesc->groupsize[1];
+            const int numbones  = (int)rig.bones.size();
+
+            temp::Sequence seq(seqname, numbones);
+            seq.anims.reserve(24);
+            PopulateSeqCommon(seq, pSeqDesc, path, out_dir, activityname);
+
+            verbose("%s\n", seqname.c_str());
+
+            ParsePoseKey   (pSeqDesc, seq);
+            ParseEvent     (pSeqDesc, seq);
+            ParseAutoLayer (pSeqDesc, seq);
+            ParseWeightList(pSeqDesc, seq);
+            ParseActMod    (pSeqDesc, seq);
+
+            auto* pBlends = PTR_FROM_IDX(uint16_t, stream_buffer, pSeqDesc->animindexindex);
+            std::vector<int32_t> animIndexes = GetAnimIndexes(pBlends, seq, numanims);
+
+            const uint32_t bfa_size = BFA6Size(numbones);
+
+            for (int anim_iter = 0; anim_iter < seq.numuniqueblends; anim_iter++) {
+                auto* pAnimDesc = PTR_FROM_IDX(anim::v13::mstudioanimdesc_t, stream_buffer, animIndexes[anim_iter]);
+
+                temp::animdesc_t anim{};
+
+                if (pAnimDesc->animDataAsset) {
+                    std::string asqdPath = std::format("{}/animseq_data/0x{:016X}.asqd", in_dir, pAnimDesc->animDataAsset);
+                    if (!std::filesystem::is_regular_file(asqdPath))
+                        asqdPath = std::format("{}/animseq_data/0x{:X}.asqd", in_dir, pAnimDesc->animDataAsset);
+                    if (!std::filesystem::is_regular_file(asqdPath)) {
+                        print("[!] Error: asqd not found for %s\n", rel.string().c_str());
+                        return;
+                    }
+                    anim.asqd = LoadFile(asqdPath);
+                    anim.asqdBfa6 = true;
+                }
+
+                anim.name      = STRING_FROM_IDX(pAnimDesc, pAnimDesc->sznameindex);
+                anim.fps       = pAnimDesc->fps;
+                anim.flags     = pAnimDesc->flags;
+                anim.numframes = pAnimDesc->numframes;
+                if (pAnimDesc->sectionindex) anim.sectionstallframes = pAnimDesc->sectionstallframes;
+                anim.InitData(rig, seq.IsAdditive());
+
+                if (!(anim.flags & ANIM_VALID)) { seq.anims.push_back(std::move(anim)); continue; }
+
+                if (anim.flags & ANIM_DATAPOINT) {
+                    AssertMsg(!anim.asqd.buffer.empty(), "DataPoint anim has no .asqd buffer for '%s'", seq.name.c_str());
+
+                    r5::DP::ParseDataPoint(pAnimDesc, rig, seq, anim);
+                    RLE::ParseIkrules(pAnimDesc, anim);
+                    if (pAnimDesc->flags & ANIM_FRAMEMOVEMENT)
+                        r5::DP::ParseFrameMovementsDP(pAnimDesc, anim);
+                }
+                else {
+                    anim.numsections = 1;
+                    int32_t* animsections{};
+                    if (pAnimDesc->sectionindex) {
+                        anim.numsections = GetSectionCount(*pAnimDesc);
+                        animsections = PTR_FROM_IDX(int32_t, pAnimDesc, pAnimDesc->sectionindex);
+                    }
+
+                    uint32_t sectionbaseframe = 0;
+                    for (uint32_t section = 0; section < anim.numsections; section++) {
+                        const uint32_t sectionframes = GetSectionLength(*pAnimDesc, section, anim.numsections);
+
+                        // Stale-ref guard on the COMPUTED range (raw sectionframes
+                        // may be 0xFFFF for healthy single-section clips): a section
+                        // running past numframes would write outside animdata and
+                        // poison the heap for other tasks. Skip loudly instead.
+                        if (sectionbaseframe + sectionframes > (uint32_t)anim.numframes) {
+                            printf("[!] Skipping %s (section %u frame range [%u..%u) exceeds numframes %d, stale refs)\n",
+                                seq.name.c_str(), section, sectionbaseframe, sectionbaseframe + sectionframes, anim.numframes);
+                            fflush(stdout);
+                            return;
+                        }
+
+                        // Section tables address sections 1.. (entries[i] = section i+1),
+                        // like v12.1: negative entries address the extn block
+                        // (~entry), non-negative entries the asqd block. Section 0
+                        // (stall) is implicit at asqd+0; the trailing entry is an
+                        // extent anchor, not decode-addressed (retail pAnimdataStall_2).
+                        char* pBFA = reinterpret_cast<char*>(anim.asqd.buffer.data());
+                        if (pAnimDesc->sectionindex && section) {
+                            const int32_t sectionIdx = animsections[section - 1];
+                            if (sectionIdx < 0) {
+                                const int32_t offset = -1 - sectionIdx;
+                                seq.extn = LoadFile(path + "_extn");
+                                AssertMsg((size_t)offset < seq.extn.size, "passed the end of .rseq_extn '%s'", seq.extn.path.c_str());
+                                pBFA = PTR_FROM_IDX(char, seq.extn.buffer.data(), offset);
+                            }
+                            else {
+                                AssertMsg((size_t)sectionIdx < anim.asqd.size, "passed the end of .asqd '%s:%s'", seq.name.c_str(), anim.asqd.path.c_str());
+                                pBFA = PTR_FROM_IDX(char, anim.asqd.buffer.data(), sectionIdx);
+                            }
+                        }
+
+                        // Empty payload guard: classic RLE walks pBFA unconditionally;
+                        // a null walk pointer means stale refs, not inline data.
+                        if (anim.asqd.buffer.empty()) {
+                            printf("[!] Skipping %s (empty anim payload for '%s')\n", seq.name.c_str(), anim.name.c_str());
+                            fflush(stdout);
+                            return;
+                        }
+
+                        // Stub-payload check (see RLESectionFits): a truncated RLE chain
+                        // would fault mid-walk; emit the base pose plus movement.
+                        const char* pBFAEnd = anim.asqd.buffer.data() + anim.asqd.size;
+                        if (!seq.extn.buffer.empty() && pBFA >= seq.extn.buffer.data()
+                            && pBFA < seq.extn.buffer.data() + seq.extn.size)
+                            pBFAEnd = seq.extn.buffer.data() + seq.extn.size;
+                        if (!RLESectionFits(pBFA, numbones, bfa_size, pBFAEnd, true)) {
+                            printf("[!] %s:%s stub RLE payload, emitting base pose\n", seq.name.c_str(), anim.name.c_str());
+                            fflush(stdout);
+                            anim.asqdStub = true;
+                            sectionbaseframe += sectionframes;
+                            continue;
+                        }
+
+                        ParseRLESection(pBFA, numbones, bfa_size, sectionbaseframe, sectionframes, anim, true);
+                        sectionbaseframe += sectionframes;
+                    }
+
+                    RLE::ParseIkrules       (pAnimDesc, anim);
+                    RLE::ParseFrameMovements(pAnimDesc, anim);
+                }
+                seq.anims.push_back(std::move(anim));
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                rig.sequences.push_back(std::move(seq));
+            }
+}
+
+// File-scope SEH wrapper (POD params only): isolates one bad sequence's
+// AV/failfast so the rest of the rig still converts. Loud skip, then continue.
+static void RunOneSeqV13(const char* in_dir_c, const char* file_c, temp::rig_t* rig_p, std::mutex* mutex_p)
+{
+    __try {
+        ParseOneSeqV13(in_dir_c, file_c, *rig_p, *mutex_p);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        printf("[!] Skipping %s (parse fault, code=0x%08X)\n", file_c, GetExceptionCode());
+        fflush(stdout);
+    }
+}
+
+void ParseRSEQ_v13(std::string in_dir, temp::rig_t& rig) {
+    ProgressBar bar(rig.rseqpaths.size());
+    std::vector<std::future<void>> tasks;
+    std::mutex mutex;
+
+    if ((g_VerboseLevel == 1) && !rig.rseqpaths.empty()) bar.Print();
+
+    tasks.reserve(rig.rseqpaths.size());
+    for (const auto& file : rig.rseqpaths) {
+        // NOTE: file-scope SEH wrapper (no C++ objects, no C++ try): C2712/C2713
+        // forbid __try inside the loop lambda. C++ throws from the parsers
+        // (Error/AssertMsg, already printf+fflush) land here too.
+        tasks.push_back(std::async(std::launch::async, &RunOneSeqV13,
+            in_dir.c_str(), file.c_str(), &rig, &mutex));
         if (g_VerboseLevel == 1) bar.AddAndPrint();
     }
     for (auto& t : tasks) t.get();
@@ -1039,7 +1349,7 @@ void WriteRSEQ_v7(temp::rig_t& rig) {
                     pData += sizeof(anim::v7::mstudioframemovement_t);
 
                     auto& movementdata = anim.movement.movementdata;
-                    const uint32_t sectioncount = static_cast<uint32_t>((float)(anim.numframes - 1) / (float)anim.movement.sectionframes) + 1;
+                    const uint32_t sectioncount = anim.movement.sectionframes ? static_cast<uint32_t>((float)(anim.numframes - 1) / (float)anim.movement.sectionframes) + 1 : 1;
                     auto* sectionindices = reinterpret_cast<int32_t*>(pData);
                     pData += sizeof(uint32_t) * sectioncount;
 
@@ -1242,7 +1552,9 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 animDesc->numikrules          = static_cast<uint16_t>(anim.ikrules.size());
                 animDesc->sectionDataExternal = 0;
                 animDesc->unk1                = 0;
-                animDesc->sectionstallframes  = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(anim.sectionstallframes) : 0; // 0 when unsectioned (matches native v11)
+                // Re-sectioned at 61 frames, so the stall follows the native v11 envelope
+                // (16, never the source's) instead of the source season's section layout.
+                animDesc->sectionstallframes  = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(16) : 0; // 0 when unsectioned (matches native v11)
                 animDesc->sectionframes       = (anim.numframes > (int)targetsectionframes) ? static_cast<uint16_t>(targetsectionframes) : 0;
                 animDesc->sectionindex        = 0;
                 animDesc->ikruleindex         = 0;
@@ -1285,7 +1597,9 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 const bool bClassicTranscode = !(anim.flags & r5::ANIM_DATAPOINT)
                                              && anim.numsections == 1
                                              && anim.ikrules.empty()
-                                             && !anim.asqd.buffer.empty();
+                                             && !anim.asqd.buffer.empty()
+                                             && !anim.asqdStub
+                                             && !anim.reencode;
 
                 if (!anim.ikrules.empty()) {
                     v11SeqDesc->numikrules = std::max((int)v11SeqDesc->numikrules, (int)anim.ikrules.size());
@@ -1368,15 +1682,33 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                 animDesc->animindex = static_cast<int32_t>(pData - (char*)animDesc);
 
                 if (bClassicTranscode) {
-                    verbose("[asqd-transcode] %s: copied %zu bytes verbatim (byte-1:1)\n", anim.name.c_str(), anim.asqd.size);
-                    const size_t remain = static_cast<size_t>((pBase + buffer.size()) - pData);
-                    if (anim.asqd.size > remain) {
-                        print("[!] Error: asqd too large for rseq buffer (%zu > %zu) in %s\n",
-                            anim.asqd.size, remain, anim.name.c_str());
+                    // A v13 payload leads with a 6-bit-per-bone flag array; v11 reads 4-bit
+                    // nibbles, so repack the flags and copy the (self-relative) track chain.
+                    const int nb = static_cast<int>(rig.bones.size());
+                    const size_t srcBfa = anim.asqdBfa6 ? BFA6Size(nb) : 0;
+                    const size_t dstBfa = anim.asqdBfa6 ? (((size_t)nb + 3) / 2) & ~(size_t)1 : 0;
+                    if (anim.asqd.size < srcBfa) {
+                        print("[!] Error: asqd shorter than its flag array (%zu < %zu) in %s\n",
+                            anim.asqd.size, srcBfa, anim.name.c_str());
                         return;
                     }
-                    memcpy(pData, anim.asqd.buffer.data(), anim.asqd.size);
-                    pData += static_cast<ptrdiff_t>(anim.asqd.size);
+                    const size_t chain = anim.asqd.size - srcBfa;
+                    verbose("[asqd-transcode] %s: copied %zu bytes%s\n", anim.name.c_str(), anim.asqd.size,
+                        anim.asqdBfa6 ? " (6-bit flag array repacked to 4-bit)" : " verbatim (byte-1:1)");
+                    const size_t remain = static_cast<size_t>((pBase + buffer.size()) - pData);
+                    if (dstBfa + chain > remain) {
+                        print("[!] Error: asqd too large for rseq buffer (%zu > %zu) in %s\n",
+                            dstBfa + chain, remain, anim.name.c_str());
+                        return;
+                    }
+                    if (anim.asqdBfa6) {
+                        memset(pData, 0, dstBfa);
+                        for (int bone = 0; bone < nb; bone++)
+                            pData[bone / 2] |= static_cast<char>((BFA6Flag(anim.asqd.buffer.data(), bone) & 0xF) << (4 * (bone % 2)));
+                        pData += static_cast<ptrdiff_t>(dstBfa);
+                    }
+                    memcpy(pData, anim.asqd.buffer.data() + srcBfa, chain);
+                    pData += static_cast<ptrdiff_t>(chain);
                     ALIGN4(pData);
                 } else {
 
@@ -1386,7 +1718,10 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
                     const bool     bInterpframe  = (section + 1 != anim.numsections);
                     const uint32_t endframe      = startframe + sectionframes + bInterpframe;
 
-                    const bool bIsExtnSection = (anim.numframes >= 96) && (anim.numsections > 2) && (section != 0) && (section != (anim.numsections - 1));
+                    // Repak's S21 aseq writer embeds the .rseq blob only (no .rseq_extn
+                // support), so always inline sections even for long clips. Inline
+                // offsets decode identically regardless of clip length.
+                const bool bIsExtnSection = false;
                     char*& pOut = bIsExtnSection ? pDataExtn : pData;
 
                     if (anim.numsections > 1) {
@@ -1558,4 +1893,69 @@ void WriteRSEQ_v11(temp::rig_t& rig) {
     }
     for (auto& t : tasks) t.get();
     print("\n");
+}
+
+// ============================================================================
+//  DumpTracks -- debug oracle: decoded per-frame tracks as JSON, no conversion
+// ============================================================================
+
+static std::string SanitizeTrackPath(const std::string& s) {
+    std::string o = s;
+    for (char& c : o) {
+        if (c == '\\') c = '/';
+        else if (c == '"') c = '_';
+    }
+    return o;
+}
+
+static std::string SanitizeTrackName(const std::string& s) {
+    std::string o = s;
+    for (char& c : o) {
+        if (c == '\\' || c == '/' || c == ':' || c == ' ' || c == '@') c = '_';
+    }
+    return o;
+}
+
+void DumpTracks(const temp::rig_t& rig, const std::string& outdir) {
+    std::filesystem::create_directories(outdir);
+    for (const auto& seq : rig.sequences) {
+        const std::string path = outdir + "\\" + SanitizeTrackName(seq.name) + ".json";
+        std::ofstream f(path, std::ios::out | std::ios::binary);
+        f << "{\"seq\":\"" << SanitizeTrackName(seq.name) << "\",\"src\":\"" << SanitizeTrackPath(seq.path)
+          << "\",\"rig\":\"" << SanitizeTrackName(rig.name)
+          << "\",\"numbones\":" << seq.numbones << ",\"bones\":[";
+        for (int b = 0; b < (int)rig.bones.size(); b++) {
+            if (b) f << ",";
+            f << "\"" << SanitizeTrackName(rig.bones[b].name) << "\"";
+        }
+        f << "],\"anims\":[";
+        for (size_t ai = 0; ai < seq.anims.size(); ai++) {
+            const auto& anim = seq.anims[ai];
+            if (ai) f << ",";
+            f << "{\"name\":\"" << SanitizeTrackName(anim.name) << "\",\"fps\":" << anim.fps
+              << ",\"flags\":" << anim.flags << ",\"numframes\":" << anim.numframes << ",\"frames\":[";
+            for (int fr = 0; fr < anim.numframes; fr++) {
+                if (fr) f << ",";
+                f << "[";
+                for (int b = 0; b < (int)anim.animdata.size(); b++) {
+                    if (b) f << ",";
+                    const auto& p = anim.animdata[b].pos[fr];
+                    const auto& r = anim.animdata[b].rot[fr];
+                    const auto& s = anim.animdata[b].scl[fr];
+                    f << "[" << p.x << "," << p.y << "," << p.z << "],["
+                      << r.x << "," << r.y << "," << r.z << "],["
+                      << s.x << "," << s.y << "," << s.z << "]";
+                }
+                f << "]";
+            }
+            f << "],\"movement\":[";
+            for (size_t mi = 0; mi < anim.movement.movementdata.size(); mi++) {
+                if (mi) f << ",";
+                const auto& m = anim.movement.movementdata[mi];
+                f << "[" << m.x << "," << m.y << "," << m.z << "," << m.w << "]";
+            }
+            f << "]}";
+        }
+        f << "]}";
+    }
 }

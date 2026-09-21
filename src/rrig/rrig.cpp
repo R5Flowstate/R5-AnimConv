@@ -438,6 +438,72 @@ void ParseRRIG_v19(char* buffer, temp::rig_t& rig) {
 	ParseRRIG_v16_ikchains(buffer, rig, pRigHdr->numikchains, pRigHdr->ikchainindex);
 }
 
+// S30 (arig v7): same v19 studio header, but the linear bone block moved from
+// linearboneindex (zero) to unkDataOffset, and its flags array is u32/bone
+// (chain: flags, parent, pos, quat, qalign, scale, rot, posetobone).
+static void ParseRRIG_v30_bones(char* buffer, temp::rig_t& rig, uint32_t linearBase, uint32_t boneHdrOffset, uint32_t boneDataOffset, uint32_t bonetablebynameindex) {
+	rig.bones.resize(rig.hdr.numbones);
+	auto* pLinearBoneIndexes = reinterpret_cast<r5::v19::mstudiolinearbone_t*>(buffer + linearBase);
+	auto* pBones = reinterpret_cast<r5::v16::mstudiobonehdr_t*>(buffer + boneHdrOffset);
+	auto* pBoneDatas = reinterpret_cast<r5::v19::mstudiobonedata_t*>(buffer + boneDataOffset);
+	auto* pLinParent = reinterpret_cast<int16_t*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->parentindex);
+	auto* pLinFlags = reinterpret_cast<uint32_t*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->flagsindex);
+	auto* pLinPos = reinterpret_cast<Vector3*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->posindex);
+	auto* pLinRot = reinterpret_cast<Vector3*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->rotindex);
+	auto* pLinScl = reinterpret_cast<Vector3*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->scaleindex);
+	auto* pLinQ = reinterpret_cast<Quaternion*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->quatindex);
+	auto* pLinQalign = reinterpret_cast<Quaternion*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->qalignmentindex);
+	auto* pLinMatrix = reinterpret_cast<Matrix3x4_t*>((char*)pLinearBoneIndexes + pLinearBoneIndexes->posetoboneindex);
+	for (int i = 0; i < rig.hdr.numbones; i++) {
+		rig.bones[i].name = STRING_FROM_IDX(&pBones[i], pBones[i].sznameindex);
+		rig.bones[i].parent = pLinParent[i];
+		rig.bones[i].pos = pLinPos[i];
+		rig.bones[i].q = pLinQ[i];
+		rig.bones[i].rot = pLinRot[i];
+		rig.bones[i].scl = pLinScl[i];
+		rig.bones[i].poseToBone = pLinMatrix[i];
+		rig.bones[i].qAlignment = pLinQalign[i];
+		rig.bones[i].flags = pLinFlags[i];
+		rig.bones[i].proctype = pBoneDatas[i].proctype;
+		rig.bones[i].procindex = pBoneDatas[i].procindex;
+		rig.bones[i].physicsbone = pBones[i].physicsbone;
+		rig.bones[i].contents = pBones[i].contents;
+		rig.bones[i].surfacepropLookup = pBones[i].surfacepropLookup;
+	}
+
+	//bone by name
+	auto* bonebyname = reinterpret_cast<uint8_t*>(buffer + bonetablebynameindex);
+	rig.bonebyname.resize(rig.hdr.numbones);
+	for (int i = 0; i < rig.hdr.numbones; i++) {
+		rig.bonebyname[i] = bonebyname[i];
+	}
+}
+
+void ParseRRIG_v30(char* buffer, temp::rig_t& rig) {
+	// Header
+	auto* pRigHdr = reinterpret_cast<r5::v19::studiohdr_t*>(buffer);
+	rig.name = STRING_FROM_IDX(pRigHdr, pRigHdr->sznameindex);
+	rig.hdr.illumposition = pRigHdr->illumposition;
+	rig.hdr.hull_min = pRigHdr->hull_min;
+	rig.hdr.hull_max = pRigHdr->hull_max;
+	rig.hdr.view_bbmin = pRigHdr->view_bbmin;
+	rig.hdr.view_bbmax = pRigHdr->view_bbmax;
+	rig.hdr.flags = pRigHdr->flags;
+	rig.hdr.numbones = pRigHdr->boneCount;
+	rig.hdr.activitylistversion = pRigHdr->activitylistversion;
+	rig.hdr.mass = pRigHdr->mass;
+	rig.hdr.contents = pRigHdr->contents;
+	rig.hdr.defaultFadeDist = pRigHdr->fadeDistance;
+	rig.hdr.gathersize = pRigHdr->gathersize;
+	rig.hdr.surfaceprop = STRING_FROM_IDX(pRigHdr, pRigHdr->surfacepropindex);
+
+	ParseRRIG_v30_bones(buffer, rig, OFFSET(pRigHdr->unkDataOffset), pRigHdr->boneHdrOffset, pRigHdr->boneDataOffset, pRigHdr->bonetablebynameindex);
+	ParseRRIG_v16_hitboxes(buffer, rig, pRigHdr->numhitboxsets, pRigHdr->hitboxsetindex);
+	ParseRRIG_v16_nodes(buffer, rig, pRigHdr->numlocalnodes, pRigHdr->localnodenameindex, pRigHdr->localNodeDataOffset);
+	ParseRRIG_v16_poseparams(buffer, rig, pRigHdr->numlocalposeparameters, pRigHdr->localposeparamindex);
+	ParseRRIG_v16_ikchains(buffer, rig, pRigHdr->numikchains, pRigHdr->ikchainindex);
+}
+
 void WriteRRIG_v8(std::string output_dir, const temp::rig_t& rig) {
 	std::vector<char> buffer(8 * 1024 * 1024, 0);
 	char* pBase = buffer.data();
@@ -633,7 +699,7 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	auto* pRigHdr = reinterpret_cast<r5::v17::studiohdr_t*>(pData);
 
 	pRigHdr->flags = rig.hdr.flags;
-	pRigHdr->checksum = 0x454E494E;
+	pRigHdr->checksum = 0;
 	strncpy_s(pRigHdr->name, 33, rig.name.c_str() + std::max<int>(0, (int)rig.name.size() - 37), _TRUNCATE);
 	pRigHdr->mass = rig.hdr.mass;
 	pRigHdr->contents = rig.hdr.contents;

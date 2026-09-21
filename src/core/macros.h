@@ -4,6 +4,7 @@
 #define Error(fmt, ...) \
 	do { \
 		printf("[!] Error (%s:%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+		fflush(stdout); \
 		throw std::runtime_error(fmt); \
 	} while(0)
 
@@ -22,6 +23,7 @@
 			printf("Assertion failed: '%s'\n", #expr); \
 			printf("  %s (%d)\n", __FILE__, __LINE__); \
 			printf("  " fmt "\n", ##__VA_ARGS__); \
+			fflush(stdout); \
 			throw std::runtime_error("Assertion failed: " #expr); \
 		} \
 	} while(0)

@@ -44,6 +44,7 @@ static const std::unordered_map<std::string, ParserSet> Parsers = {
 	{"26", {ParseRRIG_v19,  ParseRSEQ_v12}},
 	{"27", {ParseRRIG_v19,  ParseRSEQ_v121}},
 	{"28", {ParseRRIG_v19,  ParseRSEQ_v121}},
+	{"30", {ParseRRIG_v30,  ParseRSEQ_v13}},
 };
 
 static const std::unordered_map<std::string, WriterSet> Writers = {

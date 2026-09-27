@@ -428,6 +428,9 @@ static int RunMdlMode(const std::string& input_mdl, const std::string& override_
 		return 1;
 	}
 
+	if (!g_DumpTracks.empty())
+		DumpTracks(rig, g_DumpTracks);
+
 	/* WRITE RRIG/RSEQ */
 	print("\n\nWriting %s\n", rig.name.c_str());
 	writer->second.rrig(output_dir, rig);

@@ -22,6 +22,13 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 	std::replace(name.begin(), name.end(), '/', '\\');
 
 	rig.name = dir + name.substr(0, name.rfind('.')) + ".rrig";
+	// A full .rrig path names the rig outright; internal model names can collide.
+	if (override_rrig_path.size() > 5 && override_rrig_path.compare(override_rrig_path.size() - 5, 5, ".rrig") == 0) {
+		rig.name = override_rrig_path;
+		std::replace(rig.name.begin(), rig.name.end(), '/', '\\');
+	}
+	// Asset names use '/', as stock assets do; sequence lookups compare them byte for byte.
+	std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
 	rig.hdr.eyeposition = pMdlHdr->eyeposition;
 	rig.hdr.illumposition = pMdlHdr->illumposition;
 	rig.hdr.hull_min = pMdlHdr->hull_min;
@@ -136,6 +143,7 @@ void ParseMDL_v49(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 			seqdescname = seq_dir + seq_name;
 		}
 
+		std::replace(seqdescname.begin(), seqdescname.end(), '\\', '/');
 		verbose("\n    ->%s\n", seqdescname.c_str());
 
 		//header
@@ -384,6 +392,13 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 	std::replace(name.begin(), name.end(), '/', '\\');
 
 	rig.name = dir + name.substr(0, name.rfind('.')) + ".rrig";
+	// A full .rrig path names the rig outright; internal model names can collide.
+	if (override_rrig_path.size() > 5 && override_rrig_path.compare(override_rrig_path.size() - 5, 5, ".rrig") == 0) {
+		rig.name = override_rrig_path;
+		std::replace(rig.name.begin(), rig.name.end(), '/', '\\');
+	}
+	// Asset names use '/', as stock assets do; sequence lookups compare them byte for byte.
+	std::replace(rig.name.begin(), rig.name.end(), '\\', '/');
 	rig.hdr.eyeposition = pMdlHdr->eyeposition;
 	rig.hdr.illumposition = pMdlHdr->illumposition;
 	rig.hdr.hull_min = pMdlHdr->hull_min;
@@ -498,6 +513,7 @@ void ParseMDL_v53(char* buffer, temp::rig_t& rig, std::string output_dir, std::s
 			seqdescname = seq_dir + seq_name;
 		}
 
+		std::replace(seqdescname.begin(), seqdescname.end(), '\\', '/');
 		verbose("\n    ->%s\n", seqdescname.c_str());
 
 		//header

@@ -737,8 +737,8 @@ void ParseRSEQ_v121(std::string in_dir, temp::rig_t& rig) {
 //  Disk layout is field-identical to v12.1 (116 B seqdesc, 48 B animdesc with
 //  animDataAsset guid); only the asqd file naming differs: dumps use
 //  zero-padded 0x%016X while older flows wrote the unpadded form, so both are
-//  accepted. Section tables follow the engine convention (retail
-//  pAnimdataStall_2): section 0 (stall) is implicit at asqd+0, sections 1..
+//  accepted. Section tables follow the engine convention
+//  (pAnimdataStall_2): section 0 (stall) is implicit at asqd+0, sections 1..
 //  come from entries[i] = section i+1 (negative = extn offset ~entry).
 // ============================================================================
 
@@ -909,7 +909,7 @@ static void ParseOneSeqV13(const char* in_dir_c, const char* file_c, temp::rig_t
                         // like v12.1: negative entries address the extn block
                         // (~entry), non-negative entries the asqd block. Section 0
                         // (stall) is implicit at asqd+0; the trailing entry is an
-                        // extent anchor, not decode-addressed (retail pAnimdataStall_2).
+                        // extent anchor, not decode-addressed (pAnimdataStall_2).
                         char* pBFA = reinterpret_cast<char*>(anim.asqd.buffer.data());
                         if (pAnimDesc->sectionindex && section) {
                             const int32_t sectionIdx = animsections[section - 1];

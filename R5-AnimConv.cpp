@@ -14,6 +14,9 @@ std::string g_DumpTracks;
 std::string g_TargetRigDir;
 std::string g_DumpRig;
 bool g_SnapConstPos = false;
+// Clips played through an animated reference attachment carry their offset from the parent
+// attachment in jx_c_start, not in framemovement; snapping it collapses them onto the attachment.
+bool g_KeepStartPos = false;
 
 // -collapsepose <param>=<value>[@<sequence substring>]: a blend dimension driven
 // by a pose parameter the target engine never sets is fixed at the authored
@@ -183,6 +186,7 @@ static void SnapConstantPositions(temp::rig_t& rig) {
 				for (size_t f = 1; f < pos.size() && constant; f++) constant = pos[f].approx_equal(pos[0]);
 				if (!rootMotionBone && (!constant || pos[0].approx_equal(rig.bones[b].pos))) continue;
 				if (rootMotionBone && constant && pos[0].approx_equal(rig.bones[b].pos)) continue;
+				if (rootMotionBone && g_KeepStartPos) continue;
 				std::fill(pos.begin(), pos.end(), rig.bones[b].pos);
 				anim.reencode = true;
 				snapped++;
@@ -489,6 +493,7 @@ int main(int argc, char* argv[]) {
 		ARG_VAL("-targetrigs", g_TargetRigDir, "[!] Error: -targetrigs requires a path.\n");
 		ARG_VAL("-dumprig", g_DumpRig, "[!] Error: -dumprig requires a path.\n");
 		ARG_BOOL("-snapconstpos", g_SnapConstPos);
+		ARG_BOOL("-keepstartpos", g_KeepStartPos);
 		if (arg == "-collapsepose") {
 			if (++i >= argc || !ParseCollapsePose(argv[i])) {
 				printf("[!] Error: -collapsepose requires <param>=<value>[@<sequence substring>].\n");

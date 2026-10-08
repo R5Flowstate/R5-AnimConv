@@ -16,6 +16,29 @@ std::string g_DumpRig;
 bool g_SnapConstPos = false;
 // -snapbones a,b,c: snap only these bones (implies -snapconstpos)
 std::unordered_set<std::string> g_SnapBones;
+// -noscale: write no scale tracks. S30 stores 0 scale on helper bones that S21 arms
+// skin to; an additive layer then collapses those vertices.
+bool g_NoScale = false;
+
+static void DropScaleTracks(temp::rig_t& rig) {
+	const Vector3 one(1, 1, 1);
+	int dropped = 0;
+	for (auto& seq : rig.sequences) {
+		const bool additive = seq.IsAdditive();
+		for (auto& anim : seq.anims) {
+			for (int b = 0; b < (int)anim.animdata.size() && b < (int)rig.bones.size(); b++) {
+				const Vector3& rest = additive ? one : rig.bones[b].scl;
+				auto& scl = anim.animdata[b].scl;
+				bool changed = false;
+				for (auto& v : scl) {
+					if (!v.approx_equal(rest)) { v = rest; changed = true; }
+				}
+				if (changed) { anim.reencode = true; dropped++; }
+			}
+		}
+	}
+	if (dropped) print("[+] %s: %d scale tracks dropped\n", rig.name.c_str(), dropped);
+}
 // Clips played through an animated reference attachment carry their offset from the parent
 // attachment in jx_c_start, not in framemovement; snapping it collapses them onto the attachment.
 bool g_KeepStartPos = false;
@@ -349,6 +372,7 @@ static int RunRseqMode(const std::string& input_path) {
 		if (target.loaded) RemapRigToTarget(rig, target);
 		if (target.loaded && g_SnapConstPos) SnapConstantPositions(rig);
 		CollapsePoseParams(rig);
+		if (g_NoScale) DropScaleTracks(rig);
 
 		if (!g_DumpRig.empty()) DumpRig(rig, g_DumpRig);
 		if (!g_DumpTracks.empty()) {
@@ -497,6 +521,7 @@ int main(int argc, char* argv[]) {
 		ARG_VAL("-dumprig", g_DumpRig, "[!] Error: -dumprig requires a path.\n");
 		ARG_BOOL("-snapconstpos", g_SnapConstPos);
 		ARG_BOOL("-keepstartpos", g_KeepStartPos);
+		ARG_BOOL("-noscale", g_NoScale);
 		if (arg == "-snapbones") {
 			if (++i >= argc) {
 				printf("[!] Error: -snapbones requires a comma-separated bone list.\n");

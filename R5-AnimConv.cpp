@@ -14,6 +14,8 @@ std::string g_DumpTracks;
 std::string g_TargetRigDir;
 std::string g_DumpRig;
 bool g_SnapConstPos = false;
+// -snapbones a,b,c: snap only these bones (implies -snapconstpos)
+std::unordered_set<std::string> g_SnapBones;
 // Clips played through an animated reference attachment carry their offset from the parent
 // attachment in jx_c_start, not in framemovement; snapping it collapses them onto the attachment.
 bool g_KeepStartPos = false;
@@ -177,6 +179,7 @@ static void SnapConstantPositions(temp::rig_t& rig) {
 		for (auto& anim : seq.anims) {
 			for (int b = 0; b < (int)anim.animdata.size() && b < (int)rig.bones.size(); b++) {
 				if (!IsProportionBone(rig.bones[b].name)) continue;
+				if (!g_SnapBones.empty() && !g_SnapBones.count(rig.bones[b].name)) continue;
 				auto& pos = anim.animdata[b].pos;
 				if (pos.empty()) continue;
 				// Root motion rides the framemovement block; a translating start bone would
@@ -494,6 +497,17 @@ int main(int argc, char* argv[]) {
 		ARG_VAL("-dumprig", g_DumpRig, "[!] Error: -dumprig requires a path.\n");
 		ARG_BOOL("-snapconstpos", g_SnapConstPos);
 		ARG_BOOL("-keepstartpos", g_KeepStartPos);
+		if (arg == "-snapbones") {
+			if (++i >= argc) {
+				printf("[!] Error: -snapbones requires a comma-separated bone list.\n");
+				return 1;
+			}
+			std::stringstream ss(argv[i]);
+			for (std::string name; std::getline(ss, name, ',');)
+				if (!name.empty()) g_SnapBones.insert(name);
+			g_SnapConstPos = true;
+			continue;
+		}
 		if (arg == "-collapsepose") {
 			if (++i >= argc || !ParseCollapsePose(argv[i])) {
 				printf("[!] Error: -collapsepose requires <param>=<value>[@<sequence substring>].\n");

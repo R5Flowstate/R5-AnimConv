@@ -875,6 +875,52 @@ void WriteRRIG_v17(std::string output_dir, const temp::rig_t& rig) {
 	}
 	pData += pRigHdr->boneCount * sizeof(r5::v16::mstudiobonedata_t);
 
+	// S21 takes the default pose of every bone a sequence does not animate from these arrays;
+	// without them the fallback leaves those bones at the parent's origin.
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pBase, pRigHdr->linearboneindex);
+	auto* pLinear = reinterpret_cast<r5::v19::mstudiolinearbone_t*>(pData);
+	pLinear->numbones = pRigHdr->boneCount;
+	pData += sizeof(r5::v19::mstudiolinearbone_t);
+	const int nLinear = pRigHdr->boneCount;
+
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pLinear, pLinear->flagsindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<uint32_t*>(pData)[i] = static_cast<uint32_t>(rig.bones[i].flags);
+	pData += sizeof(uint32_t) * nLinear;
+
+	pData = EmitShortOffset(pData, pLinear, pLinear->parentindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<int16_t*>(pData)[i] = static_cast<int16_t>(rig.bones[i].parent);
+	pData += sizeof(int16_t) * nLinear;
+
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pLinear, pLinear->posindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Vector3*>(pData)[i] = rig.bones[i].pos;
+	pData += sizeof(Vector3) * nLinear;
+
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pLinear, pLinear->quatindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Quaternion*>(pData)[i] = rig.bones[i].q;
+	pData += sizeof(Quaternion) * nLinear;
+
+	pData = EmitShortOffset(pData, pLinear, pLinear->rotindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Vector3*>(pData)[i] = rig.bones[i].rot;
+	pData += sizeof(Vector3) * nLinear;
+
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pLinear, pLinear->posetoboneindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Matrix3x4_t*>(pData)[i] = rig.bones[i].poseToBone;
+	pData += sizeof(Matrix3x4_t) * nLinear;
+
+	ALIGN16(pData);
+	pData = EmitShortOffset(pData, pLinear, pLinear->qalignmentindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Quaternion*>(pData)[i] = rig.bones[i].qAlignment;
+	pData += sizeof(Quaternion) * nLinear;
+
+	pData = EmitShortOffset(pData, pLinear, pLinear->scaleindex);
+	for (int i = 0; i < nLinear; i++) reinterpret_cast<Vector3*>(pData)[i] = rig.bones[i].scl;
+	pData += sizeof(Vector3) * nLinear;
+
 	ALIGN4(pData);
 
 	std::filesystem::path temp_model_dir = rig.name;

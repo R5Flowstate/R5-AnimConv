@@ -119,7 +119,7 @@ static bool InjectSequence(temp::rig_t& rig, temp::Sequence& seq) {
 		anim.animdata = clip.animdata;
 		anim.ikrules.clear();
 		anim.movement = {};
-		anim.flags &= ~0x1; // looping
+		if (!(seq.flags & 0x1)) anim.flags &= ~0x1; // a looping seq (sprint) keeps looping anims
 		anim.reencode = true;
 	}
 	seq.ikResetMask = 0;

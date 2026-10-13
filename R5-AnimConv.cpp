@@ -43,6 +43,77 @@ static void DropScaleTracks(temp::rig_t& rig) {
 // attachment in jx_c_start, not in framemovement; snapping it collapses them onto the attachment.
 bool g_KeepStartPos = false;
 
+// -inject: a sequence with a sibling "<rseq>.inj" takes its frames (and optionally its events)
+// from that file; every blend slot gets the same clip. Layout, little-endian:
+//   u32 'INJ1', u32 numframes, f32 fps, u32 numbones, i32 actweight (0 keeps the source),
+//   u16 len+label (empty keeps the source),
+//   numframes*numbones*(pos xyz, RadianEuler xyz) f32,
+//   u32 hasEvents, u32 numevents, numevents*{f32 cycle, i32 event, i32 type, u16 len+name, u16 len+options}
+bool g_Inject = false;
+std::string g_RigName;
+
+static bool InjectSequence(temp::rig_t& rig, temp::Sequence& seq) {
+	std::ifstream f(seq.path + ".inj", std::ios::binary);
+	if (!f) return false;
+	auto rd = [&f](void* p, size_t n) { f.read(reinterpret_cast<char*>(p), n); if (!f) Error("truncated .inj for '%s'", "?"); };
+	uint32_t magic = 0, numframes = 0, numbones = 0;
+	float fps = 0.f;
+	int32_t actweight = 0;
+	rd(&magic, 4); rd(&numframes, 4); rd(&fps, 4); rd(&numbones, 4); rd(&actweight, 4);
+	uint16_t labelLen = 0;
+	rd(&labelLen, 2);
+	std::string label(labelLen, 0);
+	if (labelLen) rd(label.data(), labelLen);
+	if (magic != 'INJ1' || numbones != rig.bones.size() || numframes == 0)
+		Error("bad .inj for '%s' (bones %u vs rig %zu)\n", seq.path.c_str(), numbones, rig.bones.size());
+
+	temp::animdesc_t clip;
+	clip.fps = fps;
+	clip.numframes = (int32_t)numframes;
+	clip.animdata.resize(numbones);
+	for (auto& ad : clip.animdata) ad.resize(numframes);
+	std::vector<float> fr(6);
+	for (uint32_t i = 0; i < numframes; i++)
+		for (uint32_t b = 0; b < numbones; b++) {
+			rd(fr.data(), 24);
+			clip.animdata[b].pos[i] = Vector3(fr[0], fr[1], fr[2]);
+			clip.animdata[b].rot[i] = Vector3(fr[3], fr[4], fr[5]);
+			clip.animdata[b].scl[i] = rig.bones[b].scl;
+		}
+
+	uint32_t hasEvents = 0, numevents = 0;
+	rd(&hasEvents, 4); rd(&numevents, 4);
+	if (hasEvents) {
+		seq.events.clear();
+		for (uint32_t i = 0; i < numevents; i++) {
+			temp::seqevent_t ev{};
+			uint16_t len = 0;
+			rd(&ev.cycle, 4); rd(&ev.event, 4); rd(&ev.type, 4);
+			rd(&len, 2); ev.name.resize(len); if (len) rd(ev.name.data(), len);
+			rd(&len, 2); ev.options.resize(len); if (len) rd(ev.options.data(), len);
+			seq.events.push_back(ev);
+		}
+	}
+
+	for (auto& anim : seq.anims) {
+		if (anim.IsAdditive()) Error("'%s' is additive; .inj frames are absolute\n", seq.path.c_str());
+		anim.fps = clip.fps;
+		anim.numframes = clip.numframes;
+		anim.sectionframes = 0;
+		anim.animdata = clip.animdata;
+		anim.ikrules.clear();
+		anim.movement = {};
+		anim.flags &= ~0x1; // looping
+		anim.reencode = true;
+	}
+	seq.ikResetMask = 0;
+	if (actweight) seq.actweight = actweight;
+	if (!label.empty()) seq.name = label;
+	if (seq.lastframe != 0.f) seq.lastframe = (float)(numframes - 1);
+	print("[+] %s: injected %u frames @ %g fps%s\n", seq.name.c_str(), numframes, fps, hasEvents ? ", events replaced" : "");
+	return true;
+}
+
 // -collapsepose <param>=<value>[@<sequence substring>]: a blend dimension driven
 // by a pose parameter the target engine never sets is fixed at the authored
 // key nearest <value>; later entries with a sequence filter take precedence.
@@ -371,6 +442,8 @@ static int RunRseqMode(const std::string& input_path) {
 
 		if (target.loaded) RemapRigToTarget(rig, target);
 		if (target.loaded && g_SnapConstPos) SnapConstantPositions(rig);
+		if (g_Inject) for (auto& seq : rig.sequences) InjectSequence(rig, seq);
+		if (!g_RigName.empty()) rig.name = g_RigName;
 		CollapsePoseParams(rig);
 		if (g_NoScale) DropScaleTracks(rig);
 
@@ -522,6 +595,8 @@ int main(int argc, char* argv[]) {
 		ARG_BOOL("-snapconstpos", g_SnapConstPos);
 		ARG_BOOL("-keepstartpos", g_KeepStartPos);
 		ARG_BOOL("-noscale", g_NoScale);
+		ARG_BOOL("-inject", g_Inject);
+		ARG_VAL("-rigname", g_RigName, "[!] Error: -rigname requires a rig path.\n");
 		if (arg == "-snapbones") {
 			if (++i >= argc) {
 				printf("[!] Error: -snapbones requires a comma-separated bone list.\n");

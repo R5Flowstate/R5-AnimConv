@@ -365,13 +365,15 @@ namespace r5 {
 
 			struct mstudioautolayer_t {
 				uint64_t guidSequence;
-				int iPose;
-				int flags;
+				int16_t iPose;
+				int16_t flags;
 				float start;
 				float peak;
 				float tail;
 				float end;
+				int32_t unused;
 			};
+			static_assert(sizeof(mstudioautolayer_t) == 32);
 
 			struct mstudioactivitymodifier_t {
 				uint16_t sznameindex;

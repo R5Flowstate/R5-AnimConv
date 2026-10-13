@@ -44,10 +44,12 @@ static void DropScaleTracks(temp::rig_t& rig) {
 bool g_KeepStartPos = false;
 
 // -inject: a sequence with a sibling "<rseq>.inj" takes its frames (and optionally its events)
-// from that file; every blend slot gets the same clip. Layout, little-endian:
-//   u32 'INJ1', u32 numframes, f32 fps, u32 numbones, i32 actweight (0 keeps the source),
+// from that file. Layout, little-endian:
+//   u32 'INJ1' | 'INJ2', [INJ1: u32 numframes, f32 fps], u32 numbones, i32 actweight (0 keeps the source),
 //   u16 len+label (empty keeps the source),
-//   numframes*numbones*(pos xyz, RadianEuler xyz) f32,
+//   INJ1: one clip for every blend slot
+//   INJ2: u32 numclips (1 = every slot, else one per slot), each {u32 numframes, f32 fps, frames}
+//   frames = numframes*numbones*(pos xyz, RadianEuler xyz) f32,
 //   u32 hasEvents, u32 numevents, numevents*{f32 cycle, i32 event, i32 type, u16 len+name, u16 len+options}
 bool g_Inject = false;
 std::string g_RigName;
@@ -55,31 +57,43 @@ std::string g_RigName;
 static bool InjectSequence(temp::rig_t& rig, temp::Sequence& seq) {
 	std::ifstream f(seq.path + ".inj", std::ios::binary);
 	if (!f) return false;
-	auto rd = [&f](void* p, size_t n) { f.read(reinterpret_cast<char*>(p), n); if (!f) Error("truncated .inj for '%s'", "?"); };
-	uint32_t magic = 0, numframes = 0, numbones = 0;
-	float fps = 0.f;
+	auto rd = [&f, &seq](void* p, size_t n) { f.read(reinterpret_cast<char*>(p), n); if (!f) Error("truncated .inj for '%s'\n", seq.path.c_str()); };
+	uint32_t magic = 0, numbones = 0, numclips = 1, inj1frames = 0;
+	float inj1fps = 0.f;
 	int32_t actweight = 0;
-	rd(&magic, 4); rd(&numframes, 4); rd(&fps, 4); rd(&numbones, 4); rd(&actweight, 4);
+	rd(&magic, 4);
+	if (magic != 'INJ1' && magic != 'INJ2') Error("bad .inj magic for '%s'\n", seq.path.c_str());
+	if (magic == 'INJ1') { rd(&inj1frames, 4); rd(&inj1fps, 4); }
+	rd(&numbones, 4); rd(&actweight, 4);
 	uint16_t labelLen = 0;
 	rd(&labelLen, 2);
 	std::string label(labelLen, 0);
 	if (labelLen) rd(label.data(), labelLen);
-	if (magic != 'INJ1' || numbones != rig.bones.size() || numframes == 0)
+	if (numbones != rig.bones.size())
 		Error("bad .inj for '%s' (bones %u vs rig %zu)\n", seq.path.c_str(), numbones, rig.bones.size());
+	if (magic == 'INJ2') rd(&numclips, 4);
+	if (numclips != 1 && numclips != seq.anims.size())
+		Error("'%s': .inj has %u clips for %zu blend slots\n", seq.path.c_str(), numclips, seq.anims.size());
 
-	temp::animdesc_t clip;
-	clip.fps = fps;
-	clip.numframes = (int32_t)numframes;
-	clip.animdata.resize(numbones);
-	for (auto& ad : clip.animdata) ad.resize(numframes);
-	std::vector<float> fr(6);
-	for (uint32_t i = 0; i < numframes; i++)
-		for (uint32_t b = 0; b < numbones; b++) {
-			rd(fr.data(), 24);
-			clip.animdata[b].pos[i] = Vector3(fr[0], fr[1], fr[2]);
-			clip.animdata[b].rot[i] = Vector3(fr[3], fr[4], fr[5]);
-			clip.animdata[b].scl[i] = rig.bones[b].scl;
-		}
+	std::vector<temp::animdesc_t> clips(numclips);
+	for (auto& clip : clips) {
+		uint32_t numframes = inj1frames;
+		float fps = inj1fps;
+		if (magic == 'INJ2') { rd(&numframes, 4); rd(&fps, 4); }
+		if (!numframes) Error("'%s': empty clip in .inj\n", seq.path.c_str());
+		clip.fps = fps;
+		clip.numframes = (int32_t)numframes;
+		clip.animdata.resize(numbones);
+		for (auto& ad : clip.animdata) ad.resize(numframes);
+		float fr[6];
+		for (uint32_t i = 0; i < numframes; i++)
+			for (uint32_t b = 0; b < numbones; b++) {
+				rd(fr, 24);
+				clip.animdata[b].pos[i] = Vector3(fr[0], fr[1], fr[2]);
+				clip.animdata[b].rot[i] = Vector3(fr[3], fr[4], fr[5]);
+				clip.animdata[b].scl[i] = rig.bones[b].scl;
+			}
+	}
 
 	uint32_t hasEvents = 0, numevents = 0;
 	rd(&hasEvents, 4); rd(&numevents, 4);
@@ -95,7 +109,9 @@ static bool InjectSequence(temp::rig_t& rig, temp::Sequence& seq) {
 		}
 	}
 
-	for (auto& anim : seq.anims) {
+	for (size_t a = 0; a < seq.anims.size(); a++) {
+		auto& anim = seq.anims[a];
+		const auto& clip = clips[numclips == 1 ? 0 : a];
 		if (anim.IsAdditive()) Error("'%s' is additive; .inj frames are absolute\n", seq.path.c_str());
 		anim.fps = clip.fps;
 		anim.numframes = clip.numframes;
@@ -109,8 +125,8 @@ static bool InjectSequence(temp::rig_t& rig, temp::Sequence& seq) {
 	seq.ikResetMask = 0;
 	if (actweight) seq.actweight = actweight;
 	if (!label.empty()) seq.name = label;
-	if (seq.lastframe != 0.f) seq.lastframe = (float)(numframes - 1);
-	print("[+] %s: injected %u frames @ %g fps%s\n", seq.name.c_str(), numframes, fps, hasEvents ? ", events replaced" : "");
+	if (seq.lastframe != 0.f) seq.lastframe = (float)(clips[0].numframes - 1);
+	print("[+] %s: injected %u clip(s), %d frames @ %g fps%s\n", seq.name.c_str(), numclips, clips[0].numframes, clips[0].fps, hasEvents ? ", events replaced" : "");
 	return true;
 }
 
